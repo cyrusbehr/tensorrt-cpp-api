@@ -24,6 +24,7 @@ class Logger : public nvinfer1::ILogger {
 
 class Engine {
 public:
+    Engine(const Options& options);
     // Build the network
     bool build(std::string onnxModelPath);
     // Load and prepare the network for inference
@@ -36,6 +37,7 @@ private:
 
     bool doesFileExist(const std::string& filepath);
 
+    const Options& m_options;
 
     std::shared_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     Logger m_logger;

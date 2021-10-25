@@ -1,6 +1,8 @@
-#include <iostream>
+#include "engine.h"
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+    Options options;
+    Engine engine(options);
+
     return 0;
 }

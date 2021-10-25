@@ -21,7 +21,7 @@ find_package(OpenCV REQUIRED)
 
 add_executable(tensorrt_cpp_api
         src/main.cpp
-        src/engine.h)
+        src/engine.cpp)
 
 target_include_directories(tensorrt_cpp_api PUBLIC ${OpenCV_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ${TensorRT_INCLUDE_DIRS}
         ${TensorRT_DIR}/samples/common)
