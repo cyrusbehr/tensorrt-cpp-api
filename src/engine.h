@@ -33,7 +33,7 @@ public:
     bool runInference(const std::vector<cv::Mat>& inputFaceChips, std::vector<float> featureVector);
 private:
     // Converts the engine options into a string
-    std::string serializeEngineOptions();
+    std::string serializeEngineOptions(const Options& options);
 
     bool doesFileExist(const std::string& filepath);
 
