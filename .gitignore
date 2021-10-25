@@ -1,4 +1,5 @@
 # Prerequisites
+# Prerequisites
 *.d
 
 # Compiled Object files
@@ -30,3 +31,7 @@
 *.exe
 *.out
 *.app
+
+build*
+cmake-build-*
+.idea/
