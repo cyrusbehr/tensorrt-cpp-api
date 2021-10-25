@@ -10,9 +10,9 @@ struct Options {
     // Use 16 byte floating point type for inference
     bool FP16 = false;
     // Batch size to optimize for
-    uint32_t optBatchSize = 1;
+    int32_t optBatchSize = 1;
     // Maximum allowable batch size
-    uint32_t maxBatchSize = 1;
+    int32_t maxBatchSize = 1;
     // Max allowable GPU memory to be used for model conversion, in bytes
     size_t maxWorkspaceSize = 4000000000;
 };
@@ -38,6 +38,12 @@ private:
     bool doesFileExist(const std::string& filepath);
 
     const Options& m_options;
+
+    // The network input
+    const int32_t CHANNELS = 3;
+    const int32_t WIDTH = 112;
+    const int32_t HEIGHT = 112;
+    const std::string INPUT_NAME = "data";
 
     std::shared_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     Logger m_logger;

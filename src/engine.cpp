@@ -68,6 +68,23 @@ bool Engine::build(std::string onnxModelPath) {
 
     std::cout << "Searching for engine file with name: " << engineFilename << std::endl;
 
+    if (doesFileExist(engineFilename)) {
+        std::cout << "Engine found, not regenerating..." << std::endl;
+    } else {
+        std::cout << "Engine not found, generating..." << std::endl;
+
+        auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
+        if (!config) {
+            return false;
+        }
+
+        IOptimizationProfile* profile = builder->createOptimizationProfile();
+        profile->setDimensions(INPUT_NAME.c_str(), OptProfileSelector::kMIN, Dims4(1, CHANNELS, HEIGHT, WIDTH));
+        profile->setDimensions(INPUT_NAME.c_str(), OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, CHANNELS, HEIGHT, WIDTH));
+        profile->setDimensions(INPUT_NAME.c_str(), OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, CHANNELS, HEIGHT, WIDTH));
+
+    }
+
     return true;
 }
 
