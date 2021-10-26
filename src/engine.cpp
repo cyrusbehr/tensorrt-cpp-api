@@ -162,7 +162,11 @@ bool Engine::loadNetwork() {
     // Set the device index
     auto ret = cudaSetDevice(m_options.deviceIndex);
     if (ret != 0) {
-        throw std::runtime_error("Unable to set GPU device index to: " + std::to_string(m_options.deviceIndex));
+        int numGPUs;
+        cudaGetDeviceCount(&numGPUs);
+        auto errMsg = "Unable to set GPU device index to: " + std::to_string(m_options.deviceIndex) +
+                ". Note, your device has " + std::to_string(numGPUs) + " CUDA-capable GPU(s).";
+        throw std::runtime_error(errMsg);
     }
 
     m_engine = std::unique_ptr<nvinfer1::ICudaEngine>(runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
