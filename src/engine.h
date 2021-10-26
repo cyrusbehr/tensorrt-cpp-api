@@ -15,6 +15,8 @@ struct Options {
     int32_t maxBatchSize = 16;
     // Max allowable GPU memory to be used for model conversion, in bytes
     size_t maxWorkspaceSize = 4000000000;
+    // GPU device index
+    int deviceIndex = 0;
 };
 
 // Class to extend TensorRT logger

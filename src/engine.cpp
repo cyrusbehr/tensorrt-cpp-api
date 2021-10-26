@@ -159,6 +159,11 @@ bool Engine::loadNetwork() {
         return false;
     }
 
+    // Set the device index
+    auto ret = cudaSetDevice(m_options.deviceIndex);
+    if (ret != 0) {
+        throw std::runtime_error("Unable to set GPU device index to: " + std::to_string(m_options.deviceIndex));
+    }
 
     m_engine = std::unique_ptr<nvinfer1::ICudaEngine>(runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
     if (!m_engine) {
