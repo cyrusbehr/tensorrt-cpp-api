@@ -23,6 +23,18 @@ Engine::Engine(const Options &options)
     : m_options(options) {}
 
 bool Engine::build(std::string onnxModelPath) {
+    // Only regenerate the engine file if it has not already been generated for the specified options
+    const auto engineFilename = serializeEngineOptions(m_options);
+    std::cout << "Searching for engine file with name: " << engineFilename << std::endl;
+
+    if (doesFileExist(engineFilename)) {
+        std::cout << "Engine found, not regenerating..." << std::endl;
+        return true;
+    }
+
+    // Was not able to find the engine file, generate...
+    std::cout << "Engine not found, generating..." << std::endl;
+
     // Create our engine builder.
     auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(m_logger));
     if (!builder) {
@@ -63,27 +75,49 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
-    // Only regenerate the engine file if it has not already been generated for the specified options
-    auto engineFilename = serializeEngineOptions(m_options);
-
-    std::cout << "Searching for engine file with name: " << engineFilename << std::endl;
-
-    if (doesFileExist(engineFilename)) {
-        std::cout << "Engine found, not regenerating..." << std::endl;
-    } else {
-        std::cout << "Engine not found, generating..." << std::endl;
-
-        auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
-        if (!config) {
-            return false;
-        }
-
-        IOptimizationProfile* profile = builder->createOptimizationProfile();
-        profile->setDimensions(INPUT_NAME.c_str(), OptProfileSelector::kMIN, Dims4(1, CHANNELS, HEIGHT, WIDTH));
-        profile->setDimensions(INPUT_NAME.c_str(), OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, CHANNELS, HEIGHT, WIDTH));
-        profile->setDimensions(INPUT_NAME.c_str(), OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, CHANNELS, HEIGHT, WIDTH));
-
+    auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
+    if (!config) {
+        return false;
     }
+
+    const auto input = network->getInput(0);
+    const auto inputName = input->getName();
+    const auto inputDims = input->getDimensions();
+    const auto inputC = inputDims.d[1];
+    const auto inputH = inputDims.d[2];
+    const auto inputW = inputDims.d[3];
+
+    // Specify the optimization profiles and the
+    IOptimizationProfile* profile = builder->createOptimizationProfile();
+    profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+    profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
+    profile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+
+    config->addOptimizationProfile(profile);
+    config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
+
+    if (m_options.FP16) {
+        config->setFlag(BuilderFlag::kFP16);
+    }
+
+    // CUDA stream used for profiling by the builder.
+    auto profileStream = samplesCommon::makeCudaStream();
+    if (!profileStream) {
+        return false;
+    }
+    config->setProfileStream(*profileStream);
+
+    // Build the engine
+    std::unique_ptr<IHostMemory> plan{builder->buildSerializedNetwork(*network, *config)};
+    if (!plan) {
+        return false;
+    }
+
+    // Write the engine to disk
+    std::ofstream outfile(engineFilename, std::ofstream::binary);
+    outfile.write(reinterpret_cast<const char*>(plan->data()), plan->size());
+
+    std::cout << "Success, saved engine to " << engineFilename << std::endl;
 
     return true;
 }
