@@ -7,7 +7,7 @@
 
 // Options for the network
 struct Options {
-    // Use 16 byte floating point type for inference
+    // Use 16 bit floating point type for inference
     bool FP16 = false;
     // Batch sizes to optimize for.
     std::vector<int32_t> optBatchSizes;
