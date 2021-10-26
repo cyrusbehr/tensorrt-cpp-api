@@ -36,16 +36,19 @@ int main() {
         images.emplace_back(std::move(img));
     }
 
+    // Discard the first inference time as it takes longer
+    std::vector<std::vector<float>> featureVectors;
+    succ = engine.runInference(images, featureVectors);
+    if (!succ) {
+        throw std::runtime_error("Unable to run inference.");
+    }
 
     size_t numIterations = 100;
 
     auto t1 = Clock::now();
     for (size_t i = 0; i < numIterations; ++i) {
-        std::vector<std::vector<float>> featureVectors;
-        succ = engine.runInference(images, featureVectors);
-        if (!succ) {
-            throw std::runtime_error("Unable to run inference.");
-        }
+        featureVectors.clear();
+        engine.runInference(images, featureVectors);
     }
     auto t2 = Clock::now();
     double totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
