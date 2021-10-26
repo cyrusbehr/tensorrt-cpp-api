@@ -173,7 +173,7 @@ bool Engine::loadNetwork() {
     return true;
 }
 
-bool Engine::runInference(std::vector<cv::Mat> &inputFaceChips, std::vector<std::vector<float>>& featureVectors) {
+bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vector<std::vector<float>>& featureVectors) {
     Dims4 inputDims = {static_cast<int32_t>(inputFaceChips.size()), m_inputC, m_inputH, m_inputW};
     m_context->setBindingDimensions(0, inputDims);
 
@@ -197,8 +197,8 @@ bool Engine::runInference(std::vector<cv::Mat> &inputFaceChips, std::vector<std:
 
     auto* hostDataBuffer = static_cast<float*>(m_inputBuff.hostBuffer.data());
 
-    for (int batch = 0; batch < inputFaceChips.size(); ++batch) {
-        auto& image = inputFaceChips[batch];
+    for (size_t batch = 0; batch < inputFaceChips.size(); ++batch) {
+        auto image = inputFaceChips[batch];
 
         // Preprocess code
         image.convertTo(image, CV_32FC3, 1.f / 255.f);

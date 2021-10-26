@@ -29,8 +29,8 @@ public:
     bool build(std::string onnxModelPath);
     // Load and prepare the network for inference
     bool loadNetwork();
-    // Run inference. Note, inputFaceChips are modified by func.
-    bool runInference(std::vector<cv::Mat>& inputFaceChips, std::vector<std::vector<float>>& featureVectors);
+    // Run inference.
+    bool runInference(const std::vector<cv::Mat>& inputFaceChips, std::vector<std::vector<float>>& featureVectors);
 private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options);
