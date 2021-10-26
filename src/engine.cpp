@@ -24,10 +24,10 @@ Engine::Engine(const Options &options)
 
 bool Engine::build(std::string onnxModelPath) {
     // Only regenerate the engine file if it has not already been generated for the specified options
-    const auto engineFilename = serializeEngineOptions(m_options);
-    std::cout << "Searching for engine file with name: " << engineFilename << std::endl;
+    m_engineName = serializeEngineOptions(m_options);
+    std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
 
-    if (doesFileExist(engineFilename)) {
+    if (doesFileExist(m_engineName)) {
         std::cout << "Engine found, not regenerating..." << std::endl;
         return true;
     }
@@ -88,12 +88,29 @@ bool Engine::build(std::string onnxModelPath) {
     const auto inputW = inputDims.d[3];
 
     // Specify the optimization profiles and the
-    IOptimizationProfile* profile = builder->createOptimizationProfile();
-    profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-    profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
-    profile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+    IOptimizationProfile* defaultProfile = builder->createOptimizationProfile();
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+    config->addOptimizationProfile(defaultProfile);
 
-    config->addOptimizationProfile(profile);
+    // Specify all the optimization profiles.
+    for (const auto& optBatchSize: m_options.optBatchSizes) {
+        if (optBatchSize == 1) {
+            continue;
+        }
+
+        if (optBatchSize > m_options.maxBatchSize) {
+            throw std::runtime_error("optBatchSize cannot be greater than maxBatchSize!");
+        }
+
+        IOptimizationProfile* profile = builder->createOptimizationProfile();
+        profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+        profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, inputC, inputH, inputW));
+        profile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+        config->addOptimizationProfile(profile);
+    }
+
     config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
 
     if (m_options.FP16) {
@@ -114,10 +131,44 @@ bool Engine::build(std::string onnxModelPath) {
     }
 
     // Write the engine to disk
-    std::ofstream outfile(engineFilename, std::ofstream::binary);
+    std::ofstream outfile(m_engineName, std::ofstream::binary);
     outfile.write(reinterpret_cast<const char*>(plan->data()), plan->size());
 
-    std::cout << "Success, saved engine to " << engineFilename << std::endl;
+    std::cout << "Success, saved engine to " << m_engineName << std::endl;
+
+    return true;
+}
+
+bool Engine::loadNetwork() {
+    // Read the serialized model from disk
+    std::ifstream file(m_engineName, std::ios::binary | std::ios::ate);
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    std::vector<char> buffer(size);
+    if (!file.read(buffer.data(), size)) {
+        throw std::runtime_error("Unable to read engine file");
+    }
+
+    std::unique_ptr<IRuntime> runtime{createInferRuntime(m_logger)};
+    if (!runtime) {
+        return false;
+    }
+
+
+    m_engine = std::shared_ptr<nvinfer1::ICudaEngine>(runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
+    if (!m_engine) {
+        return false;
+    }
+
+    std::cout << "Opt profiles: " << m_engine->getNbOptimizationProfiles() << std::endl;
+
+    // TODO Cyrus: Is it better to use a single optimization profile, or to switch?
+    // TODO Cyrus: Is there a penalty incurred by switching optimization profiles?
+    auto context = std::unique_ptr<nvinfer1::IExecutionContext>(m_engine->createExecutionContext());
+    if (!context) {
+        return false;
+    }
 
     return true;
 }
@@ -131,8 +182,16 @@ std::string Engine::serializeEngineOptions(const Options &options) {
         engineName += ".fp32";
     }
 
-    engineName += "." + std::to_string(options.maxBatchSize) + "." + std::to_string(options.optBatchSize) +
-            "." + std::to_string(options.maxWorkspaceSize);
+    engineName += "." + std::to_string(options.maxBatchSize) + ".";
+    for (size_t i = 0; i < m_options.optBatchSizes.size(); ++i) {
+        engineName += std::to_string(m_options.optBatchSizes[i]);
+        if (i != m_options.optBatchSizes.size() - 1) {
+            engineName += "_";
+        }
+    }
+
+    engineName += "." + std::to_string(options.maxWorkspaceSize);
 
     return engineName;
 }
+
