@@ -29,19 +29,25 @@ public:
     bool build(std::string onnxModelPath);
     // Load and prepare the network for inference
     bool loadNetwork();
-    // Run inference
-    bool runInference(const std::vector<cv::Mat>& inputFaceChips, std::vector<float> featureVector);
+    // Run inference. Note, inputFaceChips are modified by func.
+    bool runInference(std::vector<cv::Mat>& inputFaceChips, std::vector<std::vector<float>>& featureVectors);
 private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options);
 
     bool doesFileExist(const std::string& filepath);
 
-    std::shared_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
+    std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
+    std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
     const Options& m_options;
     Logger m_logger;
     samplesCommon::ManagedBuffer m_inputBuff;
-    samplesCommon::ManagedBuffer m_ouputBuff;
+    samplesCommon::ManagedBuffer m_outputBuff;
     size_t m_prevBatchSize = 0;
     std::string m_engineName;
+
+    int32_t m_inputW;
+    int32_t m_inputH;
+    int32_t m_inputC;
+    int32_t m_outputL;
 };

@@ -23,18 +23,6 @@ Engine::Engine(const Options &options)
     : m_options(options) {}
 
 bool Engine::build(std::string onnxModelPath) {
-    // Only regenerate the engine file if it has not already been generated for the specified options
-    m_engineName = serializeEngineOptions(m_options);
-    std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
-
-    if (doesFileExist(m_engineName)) {
-        std::cout << "Engine found, not regenerating..." << std::endl;
-        return true;
-    }
-
-    // Was not able to find the engine file, generate...
-    std::cout << "Engine not found, generating..." << std::endl;
-
     // Create our engine builder.
     auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(m_logger));
     if (!builder) {
@@ -75,23 +63,39 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
+    // Save the input height, width, and channels.
+    // Require this info for inference.
+    const auto input = network->getInput(0);
+    const auto output = network->getOutput(0);
+    const auto inputName = input->getName();
+    const auto inputDims = input->getDimensions();
+    m_inputC = inputDims.d[1];
+    m_inputH = inputDims.d[2];
+    m_inputW = inputDims.d[3];
+    m_outputL = output->getDimensions().d[1];
+
+    // Only regenerate the engine file if it has not already been generated for the specified options
+    m_engineName = serializeEngineOptions(m_options);
+    std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
+
+    if (doesFileExist(m_engineName)) {
+        std::cout << "Engine found, not regenerating..." << std::endl;
+        return true;
+    }
+
+    // Was not able to find the engine file, generate...
+    std::cout << "Engine not found, generating..." << std::endl;
+
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
     if (!config) {
         return false;
     }
 
-    const auto input = network->getInput(0);
-    const auto inputName = input->getName();
-    const auto inputDims = input->getDimensions();
-    const auto inputC = inputDims.d[1];
-    const auto inputH = inputDims.d[2];
-    const auto inputW = inputDims.d[3];
-
     // Specify the optimization profiles and the
     IOptimizationProfile* defaultProfile = builder->createOptimizationProfile();
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, m_inputC, m_inputH, m_inputW));
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, m_inputC, m_inputH, m_inputW));
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, m_inputC, m_inputH, m_inputW));
     config->addOptimizationProfile(defaultProfile);
 
     // Specify all the optimization profiles.
@@ -105,9 +109,9 @@ bool Engine::build(std::string onnxModelPath) {
         }
 
         IOptimizationProfile* profile = builder->createOptimizationProfile();
-        profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-        profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, inputC, inputH, inputW));
-        profile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+        profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, m_inputC, m_inputH, m_inputW));
+        profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, m_inputC, m_inputH, m_inputW));
+        profile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, m_inputC, m_inputH, m_inputW));
         config->addOptimizationProfile(profile);
     }
 
@@ -156,18 +160,97 @@ bool Engine::loadNetwork() {
     }
 
 
-    m_engine = std::shared_ptr<nvinfer1::ICudaEngine>(runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
+    m_engine = std::unique_ptr<nvinfer1::ICudaEngine>(runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
     if (!m_engine) {
         return false;
     }
 
-    std::cout << "Opt profiles: " << m_engine->getNbOptimizationProfiles() << std::endl;
-
-    // TODO Cyrus: Is it better to use a single optimization profile, or to switch?
-    // TODO Cyrus: Is there a penalty incurred by switching optimization profiles?
-    auto context = std::unique_ptr<nvinfer1::IExecutionContext>(m_engine->createExecutionContext());
-    if (!context) {
+    m_context = std::unique_ptr<nvinfer1::IExecutionContext>(m_engine->createExecutionContext());
+    if (!m_context) {
         return false;
+    }
+
+    return true;
+}
+
+bool Engine::runInference(std::vector<cv::Mat> &inputFaceChips, std::vector<std::vector<float>>& featureVectors) {
+    Dims4 inputDims = {static_cast<int32_t>(inputFaceChips.size()), m_inputC, m_inputH, m_inputW};
+    m_context->setBindingDimensions(0, inputDims);
+
+    if (!m_context->allInputDimensionsSpecified()) {
+        throw std::runtime_error("Error, not all input dimensions specified.");
+    }
+
+    auto batchSize = static_cast<int32_t>(inputFaceChips.size());
+    // Only reallocate buffers if the batch size has changed
+    if (m_prevBatchSize != inputFaceChips.size()) {
+
+        m_inputBuff.hostBuffer.resize(inputDims);
+        m_inputBuff.deviceBuffer.resize(inputDims);
+
+        Dims2 outputDims {batchSize, m_outputL};
+        m_outputBuff.hostBuffer.resize(outputDims);
+        m_outputBuff.deviceBuffer.resize(outputDims);
+
+        m_prevBatchSize = batchSize;
+    }
+
+    auto* hostDataBuffer = static_cast<float*>(m_inputBuff.hostBuffer.data());
+
+    for (int batch = 0; batch < inputFaceChips.size(); ++batch) {
+        auto& image = inputFaceChips[batch];
+
+        // Preprocess code
+        image.convertTo(image, CV_32FC3, 1.f / 255.f);
+        cv::subtract(image, cv::Scalar(0.5f, 0.5f, 0.5f), image, cv::noArray(), -1);
+        cv::divide(image, cv::Scalar(0.5f, 0.5f, 0.5f), image, 1, -1);
+
+        // NHWC to NCHW conversion
+        // NHWC: For each pixel, its 3 colors are stored together in RGB order.
+        // For a 3 channel image, say RGB, pixels of the R channel are stored first, then the G channel and finally the B channel.
+        // https://user-images.githubusercontent.com/20233731/85104458-3928a100-b23b-11ea-9e7e-95da726fef92.png
+        int offset = m_inputC * m_inputH * m_inputW * batch;
+        int r = 0 , g = 0, b = 0;
+        for (int i = 0; i < m_inputH * m_inputW * m_inputC; ++i) {
+            if (i % 3 == 0) {
+                hostDataBuffer[offset + r++] = *(reinterpret_cast<float*>(image.data) + i);
+            } else if (i % 3 == 1) {
+                hostDataBuffer[offset + g++ + 112*112] = *(reinterpret_cast<float*>(image.data) + i);
+            } else {
+                hostDataBuffer[offset + b++ + 112*112*2] = *(reinterpret_cast<float*>(image.data) + i);
+            }
+        }
+    }
+
+    // Copy from CPU to GPU
+    auto ret = cudaMemcpy(m_inputBuff.deviceBuffer.data(), m_inputBuff.hostBuffer.data(), m_inputBuff.hostBuffer.nbBytes(), cudaMemcpyHostToDevice);
+    if (ret != 0) {
+        return false;
+    }
+
+    std::vector<void*> predicitonBindings = {m_inputBuff.deviceBuffer.data(), m_outputBuff.deviceBuffer.data()};
+
+    // Run inference.
+    bool status = m_context->executeV2(predicitonBindings.data());
+    if (!status) {
+        return false;
+    }
+
+    // Copy the results back to CPU memory
+    ret = cudaMemcpy(m_outputBuff.hostBuffer.data(), m_outputBuff.deviceBuffer.data(), m_outputBuff.deviceBuffer.nbBytes(), cudaMemcpyDeviceToHost);
+    if (ret != 0) {
+        std::cout << "Unable to copy buffer from GPU back to CPU" << std::endl;
+        return false;
+    }
+
+    // Copy to output
+    for (int batch = 0; batch < batchSize; ++batch) {
+        std::vector<float> featureVector;
+        featureVector.resize(m_outputL);
+
+        memcpy(featureVector.data(), reinterpret_cast<const char*>(m_outputBuff.hostBuffer.data()) +
+        batch * m_outputL * sizeof(float), m_outputL * sizeof(float ));
+        featureVectors.emplace_back(std::move(featureVector));
     }
 
     return true;
