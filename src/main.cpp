@@ -30,10 +30,10 @@ int main() {
 
 
     const std::string inputImage = "../img.jpg";
+    auto img = cv::imread(inputImage);
+    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
     for (size_t i = 0; i < batchSize; ++i) {
-        auto img = cv::imread(inputImage);
-        cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
-        images.emplace_back(std::move(img));
+        images.push_back(img);
     }
 
     // Discard the first inference time as it takes longer
