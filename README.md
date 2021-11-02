@@ -13,10 +13,10 @@
 <br />
 <p align="center">
   <a href="https://github.com/cyrusbehr/tensorrt-cpp-api">
-    <img width="50%" src="images/logo.png" alt="logo">
+    <img width="40%" src="images/logo.png" alt="logo">
   </a>
 
-  <h3 align="center">TesnorRT C++ API Tutorial</h3>
+  <h3 align="center">TensorRT C++ API Tutorial</h3>
 
   <p align="center">
     How to use TensorRT C++ API for high performance GPU inference.
