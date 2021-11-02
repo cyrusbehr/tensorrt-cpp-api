@@ -1,6 +1,3 @@
-# tensorrt-cpp-api
-A tutorial project demonstrating how to use the TensorRT C++ API
-
 - Explain that the model must have a dynamic batch size when exported from onnx.
 - Explain motiviation for this project is shitty docs. 
 - They need to provide their own model sadly. 
@@ -16,7 +13,7 @@ A tutorial project demonstrating how to use the TensorRT C++ API
 <br />
 <p align="center">
   <a href="https://github.com/cyrusbehr/tensorrt-cpp-api">
-    <img width="30%" src="images/logo.png" alt="logo">
+    <img width="50%" src="images/logo.png" alt="logo">
   </a>
 
   <h3 align="center">TesnorRT C++ API Tutorial</h3>
@@ -27,6 +24,7 @@ A tutorial project demonstrating how to use the TensorRT C++ API
     A Venice Computer Vision Presentation
     <br />
     <br />
+    TODO here
     <!-- <a href="https://www.youtube.com/watch?v=R4KH2V5pTLI&feature=youtu.be">Video Presentation</a> -->
   ·
   <!-- <a href="https://docs.google.com/presentation/d/1hluqipWiqk3ACReqXf_7tpwtTfCvFcvSwOj4sf3Su6A/edit?usp=sharing">Presentation Slides</a> -->
@@ -39,6 +37,8 @@ A tutorial project demonstrating how to use the TensorRT C++ API
 
 # TensorRT C++ Tutorial
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference. It covers how to do the following:
+- TODO
+- TODO
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04
