@@ -24,13 +24,14 @@
     A Venice Computer Vision Presentation
     <br />
     <br />
-    TODO here
     <!-- <a href="https://www.youtube.com/watch?v=R4KH2V5pTLI&feature=youtu.be">Video Presentation</a> -->
   ·
-  <!-- <a href="https://docs.google.com/presentation/d/1hluqipWiqk3ACReqXf_7tpwtTfCvFcvSwOj4sf3Su6A/edit?usp=sharing">Presentation Slides</a> -->
-    ·
+   <a href="https://docs.google.com/presentation/d/1pUnB2zvz2THyUaRuNmyoslBD2ESQijxKcx2iM8GMvw4/edit?usp=sharing">Presentation Slides</a>
+
+[comment]: <> (    ·)
     <!-- <a href="https://social.trueface.ai/34gcD2q">Blog Post</a> -->
-    ·
+
+[comment]: <> (    ·)
     <a href="https://venicecomputervision.com/">Venice Computer Vision</a>
   </p>
 </p>
