@@ -31,7 +31,7 @@
 [comment]: <> (    ·)
     <!-- <a href="https://social.trueface.ai/34gcD2q">Blog Post</a> -->
 
-[comment]: <> (    ·)
+    ·
     <a href="https://venicecomputervision.com/">Venice Computer Vision</a>
   </p>
 </p>
