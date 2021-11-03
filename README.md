@@ -1,8 +1,3 @@
-- Explain that the model must have a dynamic batch size when exported from onnx.
-- Explain motiviation for this project is shitty docs. 
-- They need to provide their own model sadly. 
-
-
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
@@ -34,27 +29,29 @@
 
 # TensorRT C++ Tutorial
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference. It covers how to do the following:
-- TODO
-- TODO
+- How to install TensorRT on Ubuntu 20.04
+- How to generate a TRT engine file optimized for your GPU
+- How to specify a simple optimization profile
+- How to read / write data from / into GPU memory
+- How to run synchronous inference
+- How to work with models with dynamic batch sizes
+
 
 ## Getting Started
-The following instructions assume you are using Ubuntu 20.04
+The following instructions assume you are using Ubuntu 20.04.
+You will need to supply your own onnx model for this sample code. Ensure to specify a dynamic batch size when exporting the onnx model. 
 
 ### Prerequisites
 - `sudo apt install build-essential`
 - `sudo apt install python3.8`
 - `pip3 install cmake`
-
-
-### 
-TODO Install TensorRT
+- Download TensorRT from here: https://developer.nvidia.com/nvidia-tensorrt-8x-download
+- Extract, and then navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation
 
 ### Building the library
 - `mkdir build && cd build`
 - `cmake ..`
 - `make -j$(nproc)`
-- `make install`
-
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
