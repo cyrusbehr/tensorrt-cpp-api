@@ -43,7 +43,7 @@ You will need to supply your own onnx model for this sample code. Ensure to spec
 
 ### Prerequisites
 - `sudo apt install build-essential`
-- `sudo apt install python3.8`
+- `sudo apt install python3-pip`
 - `pip3 install cmake`
 - Download TensorRT from here: https://developer.nvidia.com/nvidia-tensorrt-8x-download
 - Extract, and then navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation
