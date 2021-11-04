@@ -39,6 +39,8 @@ private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options);
 
+    void getGPUUUIDs(std::vector<std::string>& gpuUUIDs);
+
     bool doesFileExist(const std::string& filepath);
 
     std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;

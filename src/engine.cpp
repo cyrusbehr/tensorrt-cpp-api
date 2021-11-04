@@ -267,6 +267,16 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
 
 std::string Engine::serializeEngineOptions(const Options &options) {
     std::string engineName = "trt.engine";
+
+    std::vector<std::string> gpuUUIDs;
+    getGPUUUIDs(gpuUUIDs);
+
+    if (static_cast<size_t>(options.deviceIndex) >= gpuUUIDs.size()) {
+        throw std::runtime_error("Error, provided device index is out of range!");
+    }
+
+    engineName+= "." + gpuUUIDs[options.deviceIndex];
+
     // Serialize the specified options into the filename
     if (options.FP16) {
         engineName += ".fp16";
@@ -287,3 +297,20 @@ std::string Engine::serializeEngineOptions(const Options &options) {
     return engineName;
 }
 
+void Engine::getGPUUUIDs(std::vector<std::string>& gpuUUIDs) {
+    int numGPUs;
+    cudaGetDeviceCount(&numGPUs);
+
+    for (int device=0; device<numGPUs; device++) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, device);
+
+        char uuid[33];
+        for(int b=0; b<16; b++) {
+            sprintf(&uuid[b*2], "%02x", (unsigned char)prop.uuid.bytes[b]);
+        }
+
+        gpuUUIDs.push_back(std::string(uuid));
+        // by comparing uuid against a preset list of valid uuids given by the client (using: nvidia-smi -L) we decide which gpus can be used.
+    }
+}
