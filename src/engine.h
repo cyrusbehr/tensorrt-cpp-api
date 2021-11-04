@@ -29,6 +29,7 @@ class Logger : public nvinfer1::ILogger {
 class Engine {
 public:
     Engine(const Options& options);
+    ~Engine();
     // Build the network
     bool build(std::string onnxModelPath);
     // Load and prepare the network for inference
@@ -51,6 +52,8 @@ private:
     samplesCommon::ManagedBuffer m_outputBuff;
     size_t m_prevBatchSize = 0;
     std::string m_engineName;
+
+    cudaStream_t m_cudaStream = nullptr;
 
     int32_t m_inputW;
     int32_t m_inputH;

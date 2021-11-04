@@ -143,6 +143,12 @@ bool Engine::build(std::string onnxModelPath) {
     return true;
 }
 
+Engine::~Engine() {
+    if (m_cudaStream) {
+        cudaStreamDestroy(m_cudaStream);
+    }
+}
+
 bool Engine::loadNetwork() {
     // Read the serialized model from disk
     std::ifstream file(m_engineName, std::ios::binary | std::ios::ate);
@@ -177,6 +183,11 @@ bool Engine::loadNetwork() {
     m_context = std::unique_ptr<nvinfer1::IExecutionContext>(m_engine->createExecutionContext());
     if (!m_context) {
         return false;
+    }
+
+    auto cudaRet = cudaStreamCreate(&m_cudaStream);
+    if (cudaRet != 0) {
+        throw std::runtime_error("Unable to create cuda stream");
     }
 
     return true;
@@ -232,7 +243,7 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
     }
 
     // Copy from CPU to GPU
-    auto ret = cudaMemcpy(m_inputBuff.deviceBuffer.data(), m_inputBuff.hostBuffer.data(), m_inputBuff.hostBuffer.nbBytes(), cudaMemcpyHostToDevice);
+    auto ret = cudaMemcpyAsync(m_inputBuff.deviceBuffer.data(), m_inputBuff.hostBuffer.data(), m_inputBuff.hostBuffer.nbBytes(), cudaMemcpyHostToDevice, m_cudaStream);
     if (ret != 0) {
         return false;
     }
@@ -240,15 +251,21 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
     std::vector<void*> predicitonBindings = {m_inputBuff.deviceBuffer.data(), m_outputBuff.deviceBuffer.data()};
 
     // Run inference.
-    bool status = m_context->executeV2(predicitonBindings.data());
+    bool status = m_context->enqueueV2(predicitonBindings.data(), m_cudaStream, nullptr);
     if (!status) {
         return false;
     }
 
     // Copy the results back to CPU memory
-    ret = cudaMemcpy(m_outputBuff.hostBuffer.data(), m_outputBuff.deviceBuffer.data(), m_outputBuff.deviceBuffer.nbBytes(), cudaMemcpyDeviceToHost);
+    ret = cudaMemcpyAsync(m_outputBuff.hostBuffer.data(), m_outputBuff.deviceBuffer.data(), m_outputBuff.deviceBuffer.nbBytes(), cudaMemcpyDeviceToHost, m_cudaStream);
     if (ret != 0) {
         std::cout << "Unable to copy buffer from GPU back to CPU" << std::endl;
+        return false;
+    }
+
+    ret = cudaStreamSynchronize(m_cudaStream);
+    if (ret != 0) {
+        std::cout << "Unable to synchronize cuda stream" << std::endl;
         return false;
     }
 
