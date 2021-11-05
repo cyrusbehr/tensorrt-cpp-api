@@ -52,11 +52,5 @@ private:
     samplesCommon::ManagedBuffer m_outputBuff;
     size_t m_prevBatchSize = 0;
     std::string m_engineName;
-
     cudaStream_t m_cudaStream = nullptr;
-
-    int32_t m_inputW;
-    int32_t m_inputH;
-    int32_t m_inputC;
-    int32_t m_outputL;
 };
