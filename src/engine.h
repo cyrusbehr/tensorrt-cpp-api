@@ -51,9 +51,4 @@ private:
     samplesCommon::ManagedBuffer m_outputBuff;
     size_t m_prevBatchSize = 0;
     std::string m_engineName;
-
-    int32_t m_inputW;
-    int32_t m_inputH;
-    int32_t m_inputC;
-    int32_t m_outputL;
 };

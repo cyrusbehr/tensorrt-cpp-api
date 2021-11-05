@@ -23,6 +23,18 @@ Engine::Engine(const Options &options)
     : m_options(options) {}
 
 bool Engine::build(std::string onnxModelPath) {
+    // Only regenerate the engine file if it has not already been generated for the specified options
+    m_engineName = serializeEngineOptions(m_options);
+    std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
+
+    if (doesFileExist(m_engineName)) {
+        std::cout << "Engine found, not regenerating..." << std::endl;
+        return true;
+    }
+
+    // Was not able to find the engine file, generate...
+    std::cout << "Engine not found, generating..." << std::endl;
+
     // Create our engine builder.
     auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(m_logger));
     if (!builder) {
@@ -69,22 +81,9 @@ bool Engine::build(std::string onnxModelPath) {
     const auto output = network->getOutput(0);
     const auto inputName = input->getName();
     const auto inputDims = input->getDimensions();
-    m_inputC = inputDims.d[1];
-    m_inputH = inputDims.d[2];
-    m_inputW = inputDims.d[3];
-    m_outputL = output->getDimensions().d[1];
-
-    // Only regenerate the engine file if it has not already been generated for the specified options
-    m_engineName = serializeEngineOptions(m_options);
-    std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
-
-    if (doesFileExist(m_engineName)) {
-        std::cout << "Engine found, not regenerating..." << std::endl;
-        return true;
-    }
-
-    // Was not able to find the engine file, generate...
-    std::cout << "Engine not found, generating..." << std::endl;
+  int32_t inputC = inputDims.d[1];
+  int32_t inputH = inputDims.d[2];
+  int32_t inputW = inputDims.d[3];
 
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
     if (!config) {
@@ -93,9 +92,9 @@ bool Engine::build(std::string onnxModelPath) {
 
     // Specify the optimization profiles and the
     IOptimizationProfile* defaultProfile = builder->createOptimizationProfile();
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, m_inputC, m_inputH, m_inputW));
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, m_inputC, m_inputH, m_inputW));
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, m_inputC, m_inputH, m_inputW));
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
+    defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
     config->addOptimizationProfile(defaultProfile);
 
     // Specify all the optimization profiles.
@@ -109,9 +108,9 @@ bool Engine::build(std::string onnxModelPath) {
         }
 
         IOptimizationProfile* profile = builder->createOptimizationProfile();
-        profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, m_inputC, m_inputH, m_inputW));
-        profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, m_inputC, m_inputH, m_inputW));
-        profile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, m_inputC, m_inputH, m_inputW));
+        profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+        profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, inputC, inputH, inputW));
+        profile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
         config->addOptimizationProfile(profile);
     }
 
@@ -183,7 +182,9 @@ bool Engine::loadNetwork() {
 }
 
 bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vector<std::vector<float>>& featureVectors) {
-    Dims4 inputDims = {static_cast<int32_t>(inputFaceChips.size()), m_inputC, m_inputH, m_inputW};
+    auto dims = m_engine->getBindingDimensions(0);
+    auto outputL = m_engine->getBindingDimensions(1).d[1];
+    Dims4 inputDims = {static_cast<int32_t>(inputFaceChips.size()), dims.d[1], dims.d[2], dims.d[3]};
     m_context->setBindingDimensions(0, inputDims);
 
     if (!m_context->allInputDimensionsSpecified()) {
@@ -197,7 +198,7 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
         m_inputBuff.hostBuffer.resize(inputDims);
         m_inputBuff.deviceBuffer.resize(inputDims);
 
-        Dims2 outputDims {batchSize, m_outputL};
+        Dims2 outputDims {batchSize, outputL};
         m_outputBuff.hostBuffer.resize(outputDims);
         m_outputBuff.deviceBuffer.resize(outputDims);
 
@@ -218,15 +219,15 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
         // NHWC: For each pixel, its 3 colors are stored together in RGB order.
         // For a 3 channel image, say RGB, pixels of the R channel are stored first, then the G channel and finally the B channel.
         // https://user-images.githubusercontent.com/20233731/85104458-3928a100-b23b-11ea-9e7e-95da726fef92.png
-        int offset = m_inputC * m_inputH * m_inputW * batch;
+        int offset = dims.d[1] * dims.d[2] * dims.d[3] * batch;
         int r = 0 , g = 0, b = 0;
-        for (int i = 0; i < m_inputH * m_inputW * m_inputC; ++i) {
+        for (int i = 0; i < dims.d[1] * dims.d[2] * dims.d[3]; ++i) {
             if (i % 3 == 0) {
                 hostDataBuffer[offset + r++] = *(reinterpret_cast<float*>(image.data) + i);
             } else if (i % 3 == 1) {
-                hostDataBuffer[offset + g++ + 112*112] = *(reinterpret_cast<float*>(image.data) + i);
+                hostDataBuffer[offset + g++ + dims.d[2]*dims.d[3]] = *(reinterpret_cast<float*>(image.data) + i);
             } else {
-                hostDataBuffer[offset + b++ + 112*112*2] = *(reinterpret_cast<float*>(image.data) + i);
+                hostDataBuffer[offset + b++ + dims.d[2]*dims.d[3]*2] = *(reinterpret_cast<float*>(image.data) + i);
             }
         }
     }
@@ -255,10 +256,10 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
     // Copy to output
     for (int batch = 0; batch < batchSize; ++batch) {
         std::vector<float> featureVector;
-        featureVector.resize(m_outputL);
+        featureVector.resize(outputL);
 
         memcpy(featureVector.data(), reinterpret_cast<const char*>(m_outputBuff.hostBuffer.data()) +
-        batch * m_outputL * sizeof(float), m_outputL * sizeof(float ));
+        batch * outputL * sizeof(float), outputL * sizeof(float ));
         featureVectors.emplace_back(std::move(featureVector));
     }
 
