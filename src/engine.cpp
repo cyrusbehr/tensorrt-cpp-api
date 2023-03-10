@@ -20,7 +20,13 @@ bool Engine::doesFileExist(const std::string &filepath) {
 }
 
 Engine::Engine(const Options &options)
-    : m_options(options) {}
+    : m_options(options) {
+    if (!m_options.doesSupportDynamicBatchSize) {
+        if (!m_options.optBatchSizes.empty()) {
+            std::cout << "Warning: The optBatchSizes configuration option will be ignored as the model only supports a static batch size" << std::endl;
+        }
+    }
+}
 
 bool Engine::build(std::string onnxModelPath) {
     // Only regenerate the engine file if it has not already been generated for the specified options
@@ -45,8 +51,10 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
-    // Set the max supported batch size
-    builder->setMaxBatchSize(m_options.maxBatchSize);
+    if (m_options.doesSupportDynamicBatchSize) {
+        // Set the max supported batch size
+        builder->setMaxBatchSize(m_options.maxBatchSize);
+    }
 
     // Define an explicit batch size and then create the network.
     // More info here: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#explicit-implicit-batch
@@ -79,43 +87,47 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
-    // Save the input height, width, and channels.
-    // Require this info for inference.
-    const auto input = network->getInput(0);
-    const auto output = network->getOutput(0);
-    const auto inputName = input->getName();
-    const auto inputDims = input->getDimensions();
-    int32_t inputC = inputDims.d[1];
-    int32_t inputH = inputDims.d[2];
-    int32_t inputW = inputDims.d[3];
+
 
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
     if (!config) {
         return false;
     }
 
-    // Specify the optimization profiles and the
-    IOptimizationProfile* defaultProfile = builder->createOptimizationProfile();
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
-    defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
-    config->addOptimizationProfile(defaultProfile);
+    if (m_options.doesSupportDynamicBatchSize) {
+        const auto input = network->getInput(0);
+        const auto output = network->getOutput(0);
+        const auto inputName = input->getName();
+        const auto inputDims = input->getDimensions();
+        int32_t inputC = inputDims.d[1];
+        int32_t inputH = inputDims.d[2];
+        int32_t inputW = inputDims.d[3];
 
-    // Specify all the optimization profiles.
-    for (const auto& optBatchSize: m_options.optBatchSizes) {
-        if (optBatchSize == 1) {
-            continue;
+        // Specify the default optimization profile
+        IOptimizationProfile *defaultProfile = builder->createOptimizationProfile();
+        defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+        defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
+        defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX,
+                                      Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+        config->addOptimizationProfile(defaultProfile);
+
+        // Specify all the optimization profiles.
+        for (const auto &optBatchSize: m_options.optBatchSizes) {
+            if (optBatchSize == 1) {
+                continue;
+            }
+
+            if (optBatchSize > m_options.maxBatchSize) {
+                throw std::runtime_error("optBatchSize cannot be greater than maxBatchSize!");
+            }
+
+            IOptimizationProfile *profile = builder->createOptimizationProfile();
+            profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+            profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, inputC, inputH, inputW));
+            profile->setDimensions(inputName, OptProfileSelector::kMAX,
+                                   Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+            config->addOptimizationProfile(profile);
         }
-
-        if (optBatchSize > m_options.maxBatchSize) {
-            throw std::runtime_error("optBatchSize cannot be greater than maxBatchSize!");
-        }
-
-        IOptimizationProfile* profile = builder->createOptimizationProfile();
-        profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-        profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, inputC, inputH, inputW));
-        profile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
-        config->addOptimizationProfile(profile);
     }
 
     config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
@@ -207,6 +219,15 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
         return false;
     }
 
+    if (!m_options.doesSupportDynamicBatchSize) {
+        if (inputFaceChips.size() > 1) {
+            std::cout << "===== Error =====" << std::endl;
+            std::cout << "Model does not support running batch inference!" << std::endl;
+            std::cout << "Please only provide a single input" << std::endl;
+            return false;
+        }
+    }
+
     auto dims = m_engine->getBindingDimensions(0);
 
     int32_t outputL = 1;
@@ -233,8 +254,6 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
         return false;
     }
 
-
-    std::cout << inputDims << std::endl;
     m_context->setBindingDimensions(0, inputDims);
 
     if (!m_context->allInputDimensionsSpecified()) {

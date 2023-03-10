@@ -13,6 +13,7 @@ enum class Precision {
 
 // Options for the network
 struct Options {
+    bool doesSupportDynamicBatchSize = true;
     // Precision to use for GPU inference. 16 bit is faster but may reduce accuracy.
     Precision precision = Precision::FP16;
     // Batch sizes to optimize for.

@@ -8,6 +8,8 @@ typedef std::chrono::high_resolution_clock Clock;
 int main() {
     // Specify our GPU inference configuration options
     Options options;
+    // TODO: If your model only supports a static batch size
+//    options.doesSupportDynamicBatchSize = false;
     options.precision = Precision::FP16; // Use fp16 precision for faster inference.
     options.optBatchSizes = {2, 4, 8};
 
@@ -15,6 +17,7 @@ int main() {
 
     // TODO: Specify your model here.
     // Must specify a dynamic batch size when exporting the model from onnx.
+    // If model only specifies a static batch size, must set the above variable doesSupportDynamicBatchSize to false.
     const std::string onnxModelpath = "../model.dynamic_batch.onnx";
 
     bool succ = engine.build(onnxModelpath);
@@ -27,7 +30,11 @@ int main() {
         throw std::runtime_error("Unable to load TRT engine.");
     }
 
-    const size_t batchSize = 4;
+    size_t batchSize = 4;
+    if (!options.doesSupportDynamicBatchSize) {
+        batchSize = 1;
+    }
+
     std::vector<cv::Mat> images;
 
     const std::string inputImage = "../inputs/img.jpg";
@@ -71,6 +78,12 @@ int main() {
 
     std::cout << "Success! Average time per inference: " << totalTime / numIterations / static_cast<float>(images.size()) <<
     " ms, for batch size of: " << images.size() << std::endl;
+
+    // Print the feature vector
+//    for (const auto& e: featureVectors[0]) {
+//        std::cout << e << " ";
+//    }
+//    std::cout << "\n" << std::flush;
 
     return 0;
 }
