@@ -6,7 +6,9 @@ typedef std::chrono::high_resolution_clock Clock;
 
 
 int main() {
+    // Specify our GPU inference configuration options
     Options options;
+    options.precision = Precision::FP16; // Use fp16 precision for faster inference.
     options.optBatchSizes = {2, 4, 8};
 
     Engine engine(options);
@@ -28,9 +30,23 @@ int main() {
     const size_t batchSize = 4;
     std::vector<cv::Mat> images;
 
-
-    const std::string inputImage = "../img.jpg";
+    const std::string inputImage = "../inputs/img.jpg";
     auto img = cv::imread(inputImage);
+
+    if (img.cols != engine.getInputWidth() ||
+        img.rows != engine.getInputHeight()) {
+        std::cout << "The image is not the right size of the model!" << std::endl;
+        std::cout << "The model expects: (" << engine.getInputHeight() << "x" << engine.getInputWidth() << ")" << std::endl;
+        std::cout << "Provided input image: (" << img.rows << "x" << img.cols << ")" << std::endl;
+        // TODO: At this point, you'd want to resize the image appropriately.
+        // I have deliberately left this part empty as it depends on your implementation.
+        // You may want to resize while maintaining the aspect ratio (with use of padding).
+        // You may want to only add padding without resizing
+        // Or you may want to only use inputs which are already sized correctly (this is the case
+        // for us as we are using face chips from a face detector pipeline).
+        return -1;
+    }
+
     cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
     for (size_t i = 0; i < batchSize; ++i) {
         images.push_back(img);

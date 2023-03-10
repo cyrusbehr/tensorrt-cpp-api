@@ -5,12 +5,18 @@
 #include "NvInfer.h"
 #include "buffers.h"
 
+// Precision used for GPU inference
+enum class Precision {
+    FP32,
+    FP16
+};
+
 // Options for the network
 struct Options {
-    // Use 16 bit floating point type for inference
-    bool FP16 = false;
+    // Precision to use for GPU inference. 16 bit is faster but may reduce accuracy.
+    Precision precision = Precision::FP16;
     // Batch sizes to optimize for.
-    std::vector<int32_t> optBatchSizes;
+    std::vector<int32_t> optBatchSizes {};
     // Maximum allowable batch size
     int32_t maxBatchSize = 16;
     // Max allowable GPU memory to be used for model conversion, in bytes.
@@ -36,11 +42,15 @@ public:
     bool loadNetwork();
     // Run inference.
     bool runInference(const std::vector<cv::Mat>& inputFaceChips, std::vector<std::vector<float>>& featureVectors);
+
+    int32_t getInputHeight() const { return m_inputH; };
+    int32_t getInputWidth() const { return m_inputW; };
 private:
+
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options);
 
-    void getGPUUUIDs(std::vector<std::string>& gpuUUIDs);
+    void getDeviceNames(std::vector<std::string>& deviceNames);
 
     bool doesFileExist(const std::string& filepath);
 
@@ -53,4 +63,7 @@ private:
     size_t m_prevBatchSize = 0;
     std::string m_engineName;
     cudaStream_t m_cudaStream = nullptr;
+
+    int32_t m_inputH = 0;
+    int32_t m_inputW = 0;
 };

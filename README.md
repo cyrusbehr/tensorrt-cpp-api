@@ -37,7 +37,6 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - How to run synchronous inference
 - How to work with models with dynamic batch sizes
 
-
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
 You will need to supply your own onnx model for this sample code. Ensure to specify a dynamic batch size when exporting the onnx model. 

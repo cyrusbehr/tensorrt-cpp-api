@@ -32,6 +32,10 @@ bool Engine::build(std::string onnxModelPath) {
         return true;
     }
 
+    if (!doesFileExist(onnxModelPath)) {
+        throw std::runtime_error("Could not find model at path: " + onnxModelPath);
+    }
+
     // Was not able to find the engine file, generate...
     std::cout << "Engine not found, generating..." << std::endl;
 
@@ -81,9 +85,9 @@ bool Engine::build(std::string onnxModelPath) {
     const auto output = network->getOutput(0);
     const auto inputName = input->getName();
     const auto inputDims = input->getDimensions();
-  int32_t inputC = inputDims.d[1];
-  int32_t inputH = inputDims.d[2];
-  int32_t inputW = inputDims.d[3];
+    int32_t inputC = inputDims.d[1];
+    int32_t inputH = inputDims.d[2];
+    int32_t inputW = inputDims.d[3];
 
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
     if (!config) {
@@ -116,7 +120,7 @@ bool Engine::build(std::string onnxModelPath) {
 
     config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
 
-    if (m_options.FP16) {
+    if (m_options.precision == Precision::FP16) {
         config->setFlag(BuilderFlag::kFP16);
     }
 
@@ -179,6 +183,10 @@ bool Engine::loadNetwork() {
         return false;
     }
 
+    auto dims = m_engine->getBindingDimensions(0);
+    m_inputH = dims.d[2];
+    m_inputW = dims.d[3];
+
     m_context = std::unique_ptr<nvinfer1::IExecutionContext>(m_engine->createExecutionContext());
     if (!m_context) {
         return false;
@@ -193,16 +201,46 @@ bool Engine::loadNetwork() {
 }
 
 bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vector<std::vector<float>>& featureVectors) {
+    if (inputFaceChips.empty()) {
+        std::cout << "===== Error =====" << std::endl;
+        std::cout << "Provided input vector is empty!" << std::endl;
+        return false;
+    }
+
     auto dims = m_engine->getBindingDimensions(0);
-    auto outputL = m_engine->getBindingDimensions(1).d[1];
-    Dims4 inputDims = {static_cast<int32_t>(inputFaceChips.size()), dims.d[1], dims.d[2], dims.d[3]};
+
+    int32_t outputL = 1;
+    auto outputDims = m_engine->getBindingDimensions(1);
+    for(int j=0; j<outputDims.nbDims; j++) {
+        if (outputDims.d[j] != -1) {
+            // Models with dynamic batch size will have first input dimension of -1, models with static batch size will not.
+            outputL *= outputDims.d[j];
+        }
+    }
+
+    auto batchSize = static_cast<int32_t>(inputFaceChips.size());
+    Dims4 inputDims = {batchSize, dims.d[1], dims.d[2], dims.d[3]};
+
+    auto& inputFaceChip = inputFaceChips[0];
+    if (inputFaceChip.channels() != dims.d[1] ||
+        inputFaceChip.rows != dims.d[2] ||
+        inputFaceChip.cols != dims.d[3]) {
+        std::cout << "===== Error =====" << std::endl;
+        std::cout << "Input does not have correct size!" << std::endl;
+        std::cout << "Execpted: (" << dims.d[1] << ", " << dims.d[2] << ", " << dims.d[3] << ")"  << std::endl;
+        std::cout << "Got: (" << inputFaceChip.channels() << ", " << inputFaceChip.rows << ", " << inputFaceChip.cols << ")" << std::endl;
+        std::cout << "Ensure you resize your input image to the correct size" << std::endl;
+        return false;
+    }
+
+
+    std::cout << inputDims << std::endl;
     m_context->setBindingDimensions(0, inputDims);
 
     if (!m_context->allInputDimensionsSpecified()) {
         throw std::runtime_error("Error, not all input dimensions specified.");
     }
 
-    auto batchSize = static_cast<int32_t>(inputFaceChips.size());
     // Only reallocate buffers if the batch size has changed
     if (m_prevBatchSize != inputFaceChips.size()) {
 
@@ -260,12 +298,14 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
     // Copy the results back to CPU memory
     ret = cudaMemcpyAsync(m_outputBuff.hostBuffer.data(), m_outputBuff.deviceBuffer.data(), m_outputBuff.deviceBuffer.nbBytes(), cudaMemcpyDeviceToHost, m_cudaStream);
     if (ret != 0) {
+        std::cout << "===== Error =====" << std::endl;
         std::cout << "Unable to copy buffer from GPU back to CPU" << std::endl;
         return false;
     }
 
     ret = cudaStreamSynchronize(m_cudaStream);
     if (ret != 0) {
+        std::cout << "===== Error =====" << std::endl;
         std::cout << "Unable to synchronize cuda stream" << std::endl;
         return false;
     }
@@ -286,17 +326,19 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
 std::string Engine::serializeEngineOptions(const Options &options) {
     std::string engineName = "trt.engine";
 
-    std::vector<std::string> gpuUUIDs;
-    getGPUUUIDs(gpuUUIDs);
+    // Add the GPU device name to the file to ensure that the model is only used on devices with the exact same GPU
+    std::vector<std::string> deviceNames;
+    getDeviceNames(deviceNames);
 
-    if (static_cast<size_t>(options.deviceIndex) >= gpuUUIDs.size()) {
+    if (static_cast<size_t>(options.deviceIndex) >= deviceNames.size()) {
         throw std::runtime_error("Error, provided device index is out of range!");
     }
 
-    engineName+= "." + gpuUUIDs[options.deviceIndex];
+    auto deviceName = deviceNames[options.deviceIndex];
+    engineName+= "." + deviceName;
 
     // Serialize the specified options into the filename
-    if (options.FP16) {
+    if (options.precision == Precision::FP16) {
         engineName += ".fp16";
     } else {
         engineName += ".fp32";
@@ -315,7 +357,7 @@ std::string Engine::serializeEngineOptions(const Options &options) {
     return engineName;
 }
 
-void Engine::getGPUUUIDs(std::vector<std::string>& gpuUUIDs) {
+void Engine::getDeviceNames(std::vector<std::string>& deviceNames) {
     int numGPUs;
     cudaGetDeviceCount(&numGPUs);
 
@@ -323,12 +365,6 @@ void Engine::getGPUUUIDs(std::vector<std::string>& gpuUUIDs) {
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, device);
 
-        char uuid[33];
-        for(int b=0; b<16; b++) {
-            sprintf(&uuid[b*2], "%02x", (unsigned char)prop.uuid.bytes[b]);
-        }
-
-        gpuUUIDs.push_back(std::string(uuid));
-        // by comparing uuid against a preset list of valid uuids given by the client (using: nvidia-smi -L) we decide which gpus can be used.
+        deviceNames.push_back(std::string(prop.name));
     }
 }
