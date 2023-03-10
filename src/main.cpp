@@ -45,6 +45,7 @@ int main() {
         std::cout << "The image is not the right size of the model!" << std::endl;
         std::cout << "The model expects: (" << engine.getInputHeight() << "x" << engine.getInputWidth() << ")" << std::endl;
         std::cout << "Provided input image: (" << img.rows << "x" << img.cols << ")" << std::endl;
+        std::cout << "You must either resize your image, add padding, or source images of the correct input size" << std::endl;
         // TODO: At this point, you'd want to resize the image appropriately.
         // I have deliberately left this part empty as it depends on your implementation.
         // You may want to resize while maintaining the aspect ratio (with use of padding).
