@@ -187,8 +187,6 @@ bool Engine::loadNetwork() {
         return false;
     }
 
-    // TODO Cyrus: Will need to test if we need to clear out the data or not. Ex. we go from large batch to smaller batch. There will be excess data there, will it fuck with things?
-
     // Allocate the input and output buffers
     m_buffers.resize(m_engine->getNbBindings());
 
