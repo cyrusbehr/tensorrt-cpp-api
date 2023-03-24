@@ -36,7 +36,7 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - How to read / write data from / into GPU memory and work with GPU images.
 - How to use cuda stream to run async inference and later synchronize. 
 - How to work with models with static and dynamic batch sizes
-- **New** Supports models with multiple outputs (and even works with batching!)
+- **New:** Supports models with multiple outputs (and even works with batching!)
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
