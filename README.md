@@ -64,6 +64,16 @@ You will need to supply your own onnx model for this sample code. Ensure to spec
 -0.0548096 -0.0994873 0.176514 0.161377 0.226807 0.215942 -0.296143 -0.0601807 0.240112 -0.18457 ...
 ```
 
+### Changelog
+
+**V2.0**
+
+- Requires OpenCV cuda to be installed. To install, follow instructions [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7).
+- `Options.optBatchSizes` has been removed, replaced by `Options.optBatchSize`.
+- Added support for models which do not support batch inference (first input dimension is fixed).
+- Support models with more than a single output (ex. SCRFD).  
+- More error checking.
+
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 [stars-shield]: https://img.shields.io/github/stars/cyrusbehr/tensorrt-cpp-api.svg?style=flat-square

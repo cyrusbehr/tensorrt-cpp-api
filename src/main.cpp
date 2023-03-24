@@ -33,7 +33,7 @@ int main() {
         throw std::runtime_error("Unable to load TRT engine.");
     }
 
-    // Lets use a batch size which matches that which we set the Options::optBatchSize option
+    // Lets use a batch size which matches that which we set the Options.optBatchSize option
     size_t batchSize = options.optBatchSize;
 
     const std::string inputImage = "../inputs/face_chip.jpg";
