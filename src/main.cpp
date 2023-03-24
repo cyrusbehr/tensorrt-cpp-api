@@ -105,10 +105,20 @@ int main() {
     " ms, for batch size of: " << images.size() << std::endl;
 
     // Print the feature vector
-//    for (const auto& e: featureVectors[0]) {
-//        std::cout << e << " ";
-//    }
-//    std::cout << "\n" << std::flush;
+    const auto& firstBatchOutput = featureVectors[0];
+
+    for (int outputNum = 0; outputNum < firstBatchOutput.size(); ++outputNum) {
+        std::cout << "Output " << outputNum << " corresponding to first input to batch" << std::endl;
+        int i = 0;
+        for (const auto& e: firstBatchOutput[outputNum]) {
+            std::cout << e << " ";
+            if (i++ == 10) {
+                std::cout << "...";
+                break;
+            }
+        }
+        std::cout << "\n" << std::endl;
+    }
 
     return 0;
 }
