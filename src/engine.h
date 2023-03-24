@@ -17,8 +17,8 @@ struct Options {
     bool doesSupportDynamicBatchSize = true;
     // Precision to use for GPU inference. 16 bit is faster but may reduce accuracy.
     Precision precision = Precision::FP16;
-    // Batch sizes to optimize for.
-    std::vector<int32_t> optBatchSizes {};
+    // The batch size which should be optimized for.
+    int32_t optBatchSize = 1;
     // Maximum allowable batch size
     int32_t maxBatchSize = 16;
     // Max allowable GPU memory to be used for model conversion, in bytes.
@@ -47,6 +47,9 @@ public:
 
     int32_t getInputHeight() const { return m_inputH; };
     int32_t getInputWidth() const { return m_inputW; };
+
+    // Utility method
+    static cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t newDim, const cv::Scalar& bgcolor = cv::Scalar(0, 0, 0));
 private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options);

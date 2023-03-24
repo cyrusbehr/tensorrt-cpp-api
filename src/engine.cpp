@@ -23,11 +23,6 @@ bool Engine::doesFileExist(const std::string &filepath) {
 
 Engine::Engine(const Options &options)
     : m_options(options) {
-    if (!m_options.doesSupportDynamicBatchSize) {
-        if (!m_options.optBatchSizes.empty()) {
-            std::cout << "Warning: The optBatchSizes configuration option will be ignored as the model only supports a static batch size" << std::endl;
-        }
-    }
 }
 
 bool Engine::build(std::string onnxModelPath) {
@@ -96,40 +91,24 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
+    const auto input = network->getInput(0);
+    const auto inputName = input->getName();
+    const auto inputDims = input->getDimensions();
+    int32_t inputC = inputDims.d[1];
+    int32_t inputH = inputDims.d[2];
+    int32_t inputW = inputDims.d[3];
+
+    // Specify the optimization profile
+    IOptimizationProfile *optProfile = builder->createOptimizationProfile();
+    optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
     if (m_options.doesSupportDynamicBatchSize) {
-        const auto input = network->getInput(0);
-        const auto inputName = input->getName();
-        const auto inputDims = input->getDimensions();
-        int32_t inputC = inputDims.d[1];
-        int32_t inputH = inputDims.d[2];
-        int32_t inputW = inputDims.d[3];
-
-        // Specify the default optimization profile
-        IOptimizationProfile *defaultProfile = builder->createOptimizationProfile();
-        defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-        defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
-        defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX,
-                                      Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
-        config->addOptimizationProfile(defaultProfile);
-
-        // Specify all the optimization profiles.
-        for (const auto &optBatchSize: m_options.optBatchSizes) {
-            if (optBatchSize == 1) {
-                continue;
-            }
-
-            if (optBatchSize > m_options.maxBatchSize) {
-                throw std::runtime_error("optBatchSize cannot be greater than maxBatchSize!");
-            }
-
-            IOptimizationProfile *profile = builder->createOptimizationProfile();
-            profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-            profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, inputC, inputH, inputW));
-            profile->setDimensions(inputName, OptProfileSelector::kMAX,
-                                   Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
-            config->addOptimizationProfile(profile);
-        }
+        optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
+        optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+    } else {
+        optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
+        optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(1, inputC, inputH, inputW));
     }
+    config->addOptimizationProfile(optProfile);
 
     config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
 
@@ -372,13 +351,7 @@ std::string Engine::serializeEngineOptions(const Options &options) {
     }
 
     engineName += "." + std::to_string(options.maxBatchSize) + ".";
-    for (size_t i = 0; i < m_options.optBatchSizes.size(); ++i) {
-        engineName += std::to_string(m_options.optBatchSizes[i]);
-        if (i != m_options.optBatchSizes.size() - 1) {
-            engineName += "_";
-        }
-    }
-
+    engineName += "." + std::to_string(options.optBatchSize) + ".";
     engineName += "." + std::to_string(options.maxWorkspaceSize);
 
     return engineName;
@@ -394,4 +367,15 @@ void Engine::getDeviceNames(std::vector<std::string>& deviceNames) {
 
         deviceNames.push_back(std::string(prop.name));
     }
+}
+
+cv::cuda::GpuMat Engine::resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat &input, size_t newDim, const cv::Scalar &bgcolor) {
+    float r = std::min(newDim / (input.cols * 1.0), newDim / (input.rows * 1.0));
+    int unpad_w = r * input.cols;
+    int unpad_h = r * input.rows;
+    cv::cuda::GpuMat re(unpad_h, unpad_w, CV_8UC3);
+    cv::cuda::resize(input, re, re.size());
+    cv::cuda::GpuMat out(newDim, newDim, CV_8UC3, bgcolor);
+    re.copyTo(out(cv::Rect(0, 0, re.cols, re.rows)));
+    return out;
 }
