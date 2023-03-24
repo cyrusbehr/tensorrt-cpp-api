@@ -350,8 +350,8 @@ std::string Engine::serializeEngineOptions(const Options &options) {
         engineName += ".fp32";
     }
 
-    engineName += "." + std::to_string(options.maxBatchSize) + ".";
-    engineName += "." + std::to_string(options.optBatchSize) + ".";
+    engineName += "." + std::to_string(options.maxBatchSize);
+    engineName += "." + std::to_string(options.optBatchSize);
     engineName += "." + std::to_string(options.maxWorkspaceSize);
 
     return engineName;
