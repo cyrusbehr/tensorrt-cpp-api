@@ -70,9 +70,10 @@ You will need to supply your own onnx model for this sample code. Ensure to spec
 
 - Requires OpenCV cuda to be installed. To install, follow instructions [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7).
 - `Options.optBatchSizes` has been removed, replaced by `Options.optBatchSize`.
-- Added support for models which do not support batch inference (first input dimension is fixed).
 - Support models with more than a single output (ex. SCRFD).  
+- Added support for models which do not support batch inference (first input dimension is fixed).
 - More error checking.
+- Fixed a bunch of common issues people were running into with the original V1.0 version.
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
