@@ -4,12 +4,22 @@
 
 typedef std::chrono::high_resolution_clock Clock;
 
+cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t newDim, const cv::Scalar& bgcolor = cv::Scalar(0, 0, 0)) {
+    float r = std::min(newDim / (input.cols * 1.0), newDim / (input.rows * 1.0));
+    int unpad_w = r * input.cols;
+    int unpad_h = r * input.rows;
+    cv::cuda::GpuMat re(unpad_h, unpad_w, CV_8UC3);
+    cv::cuda::resize(input, re, re.size());
+    cv::cuda::GpuMat out(newDim, newDim, CV_8UC3, bgcolor);
+    re.copyTo(out(cv::Rect(0, 0, re.cols, re.rows)));
+    return out;
+}
 
 int main() {
     // Specify our GPU inference configuration options
     Options options;
     // TODO: If your model only supports a static batch size
-//    options.doesSupportDynamicBatchSize = false;
+    options.doesSupportDynamicBatchSize = false;
     options.precision = Precision::FP16; // Use fp16 precision for faster inference.
     options.optBatchSizes = {2, 4, 8};
 
@@ -18,7 +28,7 @@ int main() {
     // TODO: Specify your model here.
     // Must specify a dynamic batch size when exporting the model from onnx.
     // If model only specifies a static batch size, must set the above variable doesSupportDynamicBatchSize to false.
-    const std::string onnxModelpath = "../model.dynamic_batch.onnx";
+    const std::string onnxModelpath = "../models/scrfd_10g_F0E1_TensorRT.onnx";
 
     bool succ = engine.build(onnxModelpath);
     if (!succ) {
@@ -35,13 +45,20 @@ int main() {
         batchSize = 1;
     }
 
-    std::vector<cv::Mat> images;
 
-    const std::string inputImage = "../inputs/img.jpg";
-    auto img = cv::imread(inputImage);
-    if (img.empty()) {
+    const std::string inputImage = "/home/cyrus/work/c-sdks/truefaceSDK/benchmarks/images/headshot.jpg";
+    auto cpuImg = cv::imread(inputImage);
+    if (cpuImg.empty()) {
         throw std::runtime_error("Unable to read image at path: " + inputImage);
     }
+
+    cv::cvtColor(cpuImg, cpuImg, cv::COLOR_BGR2RGB);
+
+    cv::cuda::GpuMat img;
+    img.upload(cpuImg);
+
+    // Apply our static resize algorithm.
+    img = resizeKeepAspectRatioPadRightBottom(img, engine.getInputHeight());
 
     if (img.cols != engine.getInputWidth() ||
         img.rows != engine.getInputHeight()) {
@@ -58,14 +75,18 @@ int main() {
         return -1;
     }
 
-    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+
+    std::vector<cv::cuda::GpuMat> images;
     for (size_t i = 0; i < batchSize; ++i) {
         images.push_back(img);
     }
 
+    std::array<float, 3> subVals {0.5f, 0.5f, 0.5f};
+    std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
+
     // Discard the first inference time as it takes longer
-    std::vector<std::vector<float>> featureVectors;
-    succ = engine.runInference(images, featureVectors);
+    std::vector<std::vector<std::vector<float>>> featureVectors;
+    succ = engine.runInference(images, featureVectors, subVals, divVals);
     if (!succ) {
         throw std::runtime_error("Unable to run inference.");
     }
@@ -75,7 +96,7 @@ int main() {
     auto t1 = Clock::now();
     for (size_t i = 0; i < numIterations; ++i) {
         featureVectors.clear();
-        engine.runInference(images, featureVectors);
+        engine.runInference(images, featureVectors, subVals, divVals);
     }
     auto t2 = Clock::now();
     double totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();

@@ -1,9 +1,10 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
-
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudawarping.hpp>
+#include <opencv2/cudaarithm.hpp>
 #include "NvInfer.h"
-#include "buffers.h"
 
 // Precision used for GPU inference
 enum class Precision {
@@ -42,12 +43,11 @@ public:
     // Load and prepare the network for inference
     bool loadNetwork();
     // Run inference.
-    bool runInference(const std::vector<cv::Mat>& inputFaceChips, std::vector<std::vector<float>>& featureVectors);
+    bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f}, const std::array<float, 3>& divVals = {1.f, 1.f, 1.f});
 
     int32_t getInputHeight() const { return m_inputH; };
     int32_t getInputWidth() const { return m_inputW; };
 private:
-
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options);
 
@@ -59,12 +59,10 @@ private:
     std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
     const Options& m_options;
     Logger m_logger;
-    samplesCommon::ManagedBuffer m_inputBuff;
-    samplesCommon::ManagedBuffer m_outputBuff;
-    size_t m_prevBatchSize = 0;
     std::string m_engineName;
-    cudaStream_t m_cudaStream = nullptr;
 
     int32_t m_inputH = 0;
     int32_t m_inputW = 0;
+
+    void checkCudaErrorCode(cudaError_t code);
 };
