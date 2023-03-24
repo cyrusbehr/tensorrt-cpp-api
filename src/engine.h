@@ -58,6 +58,10 @@ private:
 
     bool doesFileExist(const std::string& filepath);
 
+    // Holds pointers to the input and output GPU buffers
+    std::vector<void*> m_buffers;
+    std::vector<uint32_t> m_outputLengthsFloat{};
+
     std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
     const Options& m_options;
@@ -67,5 +71,5 @@ private:
     int32_t m_inputH = 0;
     int32_t m_inputW = 0;
 
-    void checkCudaErrorCode(cudaError_t code);
+    inline void checkCudaErrorCode(cudaError_t code);
 };

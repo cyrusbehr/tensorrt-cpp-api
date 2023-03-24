@@ -137,7 +137,14 @@ bool Engine::build(std::string onnxModelPath) {
     return true;
 }
 
-Engine::~Engine() = default;
+Engine::~Engine() {
+    // Free the GPU memory
+    for (auto & buffer : m_buffers) {
+        checkCudaErrorCode(cudaFree(buffer));
+    }
+
+    m_buffers.clear();
+}
 
 bool Engine::loadNetwork() {
     // Read the serialized model from disk
@@ -170,6 +177,9 @@ bool Engine::loadNetwork() {
         return false;
     }
 
+    if (!m_engine->bindingIsInput(0)) {
+        throw std::runtime_error("Error, the model does not have an input!");
+    }
     auto dims = m_engine->getBindingDimensions(0);
     m_inputH = dims.d[2];
     m_inputW = dims.d[3];
@@ -178,6 +188,43 @@ bool Engine::loadNetwork() {
     if (!m_context) {
         return false;
     }
+
+    // TODO Cyrus: Will need to test if we need to clear out the data or not. Ex. we go from large batch to smaller batch. There will be excess data there, will it fuck with things?
+
+    // Allocate the input and output buffers
+    m_buffers.resize(m_engine->getNbBindings());
+
+    // Create a cuda stream
+    cudaStream_t stream;
+    checkCudaErrorCode(cudaStreamCreate(&stream));
+
+    // Allocate memory for the input
+    // Allocate enough to fit the max batch size (we could end up using less later)
+    checkCudaErrorCode(cudaMallocAsync(&m_buffers[0], m_options.maxBatchSize * dims.d[1] * dims.d[2] * dims.d[3] * sizeof(float), stream));
+
+    // Allocate buffers for the outputs
+    m_outputLengthsFloat.clear();
+    for (int i = 1; i < m_engine->getNbBindings(); ++i) {
+        if (m_engine->bindingIsInput(i)) {
+            // This code implementation currently only supports models with a single input
+            throw std::runtime_error("Implementation currently only supports models with single input");
+        }
+
+        uint32_t outputLenFloat = 1;
+        auto outputDims = m_engine->getBindingDimensions(i);
+        for (int j = 1; j < outputDims.nbDims; ++j) {
+            // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer
+            outputLenFloat *= outputDims.d[j];
+        }
+
+        m_outputLengthsFloat.push_back(outputLenFloat);
+        // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
+        checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * m_options.maxBatchSize * sizeof(float), stream));
+    }
+
+    // Synchronize and destroy the cuda stream
+    checkCudaErrorCode(cudaStreamSynchronize(stream));
+    checkCudaErrorCode(cudaStreamDestroy(stream));
 
     return true;
 }
@@ -226,18 +273,8 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
     m_context->setBindingDimensions(0, inputDims); // Define the batch size
 
     if (!m_context->allInputDimensionsSpecified()) {
-        throw std::runtime_error("Error, not all input dimensions specified.");
+        throw std::runtime_error("Error, not all required dimensions specified.");
     }
-
-    std::vector<void*> buffers;
-    buffers.resize(m_engine->getNbBindings());
-
-    // Create out cuda stream
-    cudaStream_t inferenceCudaStream;
-    checkCudaErrorCode(cudaStreamCreate(&inferenceCudaStream));
-
-    // Allocate memory for the input
-    checkCudaErrorCode(cudaMallocAsync(&buffers[0], batchSize * inputs[0].rows * inputs[0].cols * inputs[0].channels() * sizeof(float), inferenceCudaStream));
 
     // Copy over the input data and perform the preprocessing
     cv::cuda::GpuMat gpu_dst(1, inputs[0].rows * inputs[0].cols * inputs.size() , CV_8UC3);
@@ -261,36 +298,13 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
 
     auto *dataPointer = mfloat.ptr<void>();
 
-    checkCudaErrorCode(cudaMemcpyAsync(buffers[0], dataPointer, mfloat.cols * mfloat.rows * mfloat.channels() * sizeof(float), cudaMemcpyDeviceToDevice, inferenceCudaStream));
-
-    // Allocate buffers for the outputs
-    int numOutputs = 0;
-    std::vector<uint32_t> outputLenghtsFloat{};
-    for (int i = 1; i < m_engine->getNbBindings(); ++i) {
-        if (m_engine->bindingIsInput(i)) {
-            // This code implementation currently only supports models with a single input
-            throw std::runtime_error("Implementation currently only supports models with single input");
-        }
-
-        ++numOutputs;
-
-        uint32_t outputLenFloat = 1;
-        auto outputDims = m_engine->getBindingDimensions(i);
-        for (int j = 1; j < outputDims.nbDims; ++j) {
-            // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer
-            outputLenFloat *= outputDims.d[j];
-        }
-
-        outputLenghtsFloat.push_back(outputLenFloat);
-        // Now size the output buffer appropriately, taking into account the batch size
-        // TODO Cyrus: Perhaps this code should be in the loadModel method, and we allocate buffers of the largest batch size
-        // TODO Cyrus: that way we avoid reallocating on every iteration of the loop
-        // TODO Cyrus: If we do that, then we need to destroy the cuda buffers in the class destructor
-        checkCudaErrorCode(cudaMallocAsync(&buffers[i], outputLenFloat * batchSize * sizeof(float), inferenceCudaStream));
-    }
+    // Create the cuda stream that will be used for inference
+    cudaStream_t inferenceCudaStream;
+    checkCudaErrorCode(cudaStreamCreate(&inferenceCudaStream));
+    checkCudaErrorCode(cudaMemcpyAsync(m_buffers[0], dataPointer, mfloat.cols * mfloat.rows * mfloat.channels() * sizeof(float), cudaMemcpyDeviceToDevice, inferenceCudaStream));
 
     // Run inference.
-    bool status = m_context->enqueueV2(buffers.data(), inferenceCudaStream, nullptr);
+    bool status = m_context->enqueueV2(m_buffers.data(), inferenceCudaStream, nullptr);
     if (!status) {
         return false;
     }
@@ -304,10 +318,10 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
         for (int outputBinding = 1; outputBinding < m_engine->getNbBindings(); ++outputBinding) {
             // First binding is the input which is why we start at index 1
             std::vector<float> output;
-            auto outputLenFloat = outputLenghtsFloat[outputBinding - 1];
+            auto outputLenFloat = m_outputLengthsFloat[outputBinding - 1];
             output.resize(outputLenFloat);
             // Copy the output
-            checkCudaErrorCode(cudaMemcpyAsync(output.data(), static_cast<char*>(buffers[outputBinding]) + (batch * sizeof(float) * outputLenFloat), outputLenFloat * sizeof(float), cudaMemcpyDeviceToHost, inferenceCudaStream));
+            checkCudaErrorCode(cudaMemcpyAsync(output.data(), static_cast<char*>(m_buffers[outputBinding]) + (batch * sizeof(float) * outputLenFloat), outputLenFloat * sizeof(float), cudaMemcpyDeviceToHost, inferenceCudaStream));
             batchOutputs.emplace_back(std::move(output));
         }
         featureVectors.emplace_back(std::move(batchOutputs));
@@ -316,14 +330,6 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
     // Synchronize the cuda stream
     checkCudaErrorCode(cudaStreamSynchronize(inferenceCudaStream));
     checkCudaErrorCode(cudaStreamDestroy(inferenceCudaStream));
-
-    // Free all of the allocate GPU memory
-    for (auto & buffer : buffers) {
-        checkCudaErrorCode(cudaFree(buffer));
-    }
-
-    buffers.clear();
-
     return true;
 }
 
