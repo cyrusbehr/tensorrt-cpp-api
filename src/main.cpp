@@ -39,6 +39,9 @@ int main() {
 
     const std::string inputImage = "../inputs/img.jpg";
     auto img = cv::imread(inputImage);
+    if (img.empty()) {
+        throw std::runtime_error("Unable to read image at path: " + inputImage);
+    }
 
     if (img.cols != engine.getInputWidth() ||
         img.rows != engine.getInputHeight()) {
