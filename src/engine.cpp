@@ -4,6 +4,8 @@
 #include "engine.h"
 #include "NvOnnxParser.h"
 
+using namespace nvinfer1;
+
 void Logger::log(Severity severity, const char *msg) noexcept {
     // Would advise using a proper logging utility such as https://github.com/gabime/spdlog
     // For the sake of this tutorial, will just log to the console.
@@ -22,9 +24,9 @@ bool Engine::doesFileExist(const std::string &filepath) {
 Engine::Engine(const Options &options)
     : m_options(options) {
     if (!m_options.doesSupportDynamicBatchSize) {
-        if (!m_options.optBatchSizes.empty()) {
-            std::cout << "Warning: The optBatchSizes configuration option will be ignored as the model only supports a static batch size" << std::endl;
-        }
+        std::cout << "Model does not support dynamic batch size, using optBatchSize and maxBatchSize of 1" << std::endl;
+        m_options.optBatchSize = 1;
+        m_options.maxBatchSize = 1;
     }
 }
 
@@ -51,10 +53,8 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
-    if (m_options.doesSupportDynamicBatchSize) {
-        // Set the max supported batch size
-        builder->setMaxBatchSize(m_options.maxBatchSize);
-    }
+    // Set the max supported batch size
+    builder->setMaxBatchSize(m_options.maxBatchSize);
 
     // Define an explicit batch size and then create the network.
     // More info here: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#explicit-implicit-batch
@@ -94,41 +94,19 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
-    if (m_options.doesSupportDynamicBatchSize) {
-        const auto input = network->getInput(0);
-        const auto output = network->getOutput(0);
-        const auto inputName = input->getName();
-        const auto inputDims = input->getDimensions();
-        int32_t inputC = inputDims.d[1];
-        int32_t inputH = inputDims.d[2];
-        int32_t inputW = inputDims.d[3];
+    const auto input = network->getInput(0);
+    const auto inputName = input->getName();
+    const auto inputDims = input->getDimensions();
+    int32_t inputC = inputDims.d[1];
+    int32_t inputH = inputDims.d[2];
+    int32_t inputW = inputDims.d[3];
 
-        // Specify the default optimization profile
-        IOptimizationProfile *defaultProfile = builder->createOptimizationProfile();
-        defaultProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-        defaultProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
-        defaultProfile->setDimensions(inputName, OptProfileSelector::kMAX,
-                                      Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
-        config->addOptimizationProfile(defaultProfile);
-
-        // Specify all the optimization profiles.
-        for (const auto &optBatchSize: m_options.optBatchSizes) {
-            if (optBatchSize == 1) {
-                continue;
-            }
-
-            if (optBatchSize > m_options.maxBatchSize) {
-                throw std::runtime_error("optBatchSize cannot be greater than maxBatchSize!");
-            }
-
-            IOptimizationProfile *profile = builder->createOptimizationProfile();
-            profile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-            profile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(optBatchSize, inputC, inputH, inputW));
-            profile->setDimensions(inputName, OptProfileSelector::kMAX,
-                                   Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
-            config->addOptimizationProfile(profile);
-        }
-    }
+    // Specify the optimization profile
+    IOptimizationProfile *optProfile = builder->createOptimizationProfile();
+    optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+    optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
+    optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+    config->addOptimizationProfile(optProfile);
 
     config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
 
@@ -137,11 +115,9 @@ bool Engine::build(std::string onnxModelPath) {
     }
 
     // CUDA stream used for profiling by the builder.
-    auto profileStream = samplesCommon::makeCudaStream();
-    if (!profileStream) {
-        return false;
-    }
-    config->setProfileStream(*profileStream);
+    cudaStream_t profileStream;
+    checkCudaErrorCode(cudaStreamCreate(&profileStream));
+    config->setProfileStream(profileStream);
 
     // Build the engine
     std::unique_ptr<IHostMemory> plan{builder->buildSerializedNetwork(*network, *config)};
@@ -155,13 +131,17 @@ bool Engine::build(std::string onnxModelPath) {
 
     std::cout << "Success, saved engine to " << m_engineName << std::endl;
 
+    checkCudaErrorCode(cudaStreamDestroy(profileStream));
     return true;
 }
 
 Engine::~Engine() {
-    if (m_cudaStream) {
-        cudaStreamDestroy(m_cudaStream);
+    // Free the GPU memory
+    for (auto & buffer : m_buffers) {
+        checkCudaErrorCode(cudaFree(buffer));
     }
+
+    m_buffers.clear();
 }
 
 bool Engine::loadNetwork() {
@@ -195,6 +175,9 @@ bool Engine::loadNetwork() {
         return false;
     }
 
+    if (!m_engine->bindingIsInput(0)) {
+        throw std::runtime_error("Error, the model does not have an input!");
+    }
     auto dims = m_engine->getBindingDimensions(0);
     m_inputH = dims.d[2];
     m_inputW = dims.d[3];
@@ -204,23 +187,62 @@ bool Engine::loadNetwork() {
         return false;
     }
 
-    auto cudaRet = cudaStreamCreate(&m_cudaStream);
-    if (cudaRet != 0) {
-        throw std::runtime_error("Unable to create cuda stream");
+    // Allocate the input and output buffers
+    m_buffers.resize(m_engine->getNbBindings());
+
+    // Create a cuda stream
+    cudaStream_t stream;
+    checkCudaErrorCode(cudaStreamCreate(&stream));
+
+    // Allocate memory for the input
+    // Allocate enough to fit the max batch size (we could end up using less later)
+    checkCudaErrorCode(cudaMallocAsync(&m_buffers[0], m_options.maxBatchSize * dims.d[1] * dims.d[2] * dims.d[3] * sizeof(float), stream));
+
+    // Allocate buffers for the outputs
+    m_outputLengthsFloat.clear();
+    for (int i = 1; i < m_engine->getNbBindings(); ++i) {
+        if (m_engine->bindingIsInput(i)) {
+            // This code implementation currently only supports models with a single input
+            throw std::runtime_error("Implementation currently only supports models with single input");
+        }
+
+        uint32_t outputLenFloat = 1;
+        auto outputDims = m_engine->getBindingDimensions(i);
+        for (int j = 1; j < outputDims.nbDims; ++j) {
+            // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer
+            outputLenFloat *= outputDims.d[j];
+        }
+
+        m_outputLengthsFloat.push_back(outputLenFloat);
+        // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
+        checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * m_options.maxBatchSize * sizeof(float), stream));
     }
+
+    // Synchronize and destroy the cuda stream
+    checkCudaErrorCode(cudaStreamSynchronize(stream));
+    checkCudaErrorCode(cudaStreamDestroy(stream));
 
     return true;
 }
 
-bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vector<std::vector<float>>& featureVectors) {
-    if (inputFaceChips.empty()) {
+void Engine::checkCudaErrorCode(cudaError_t code) {
+    if (code != 0) {
+        std::string errMsg = "CUDA operation failed with code: " + std::to_string(code) + "(" + cudaGetErrorName(code) + "), with message: " + cudaGetErrorString(code);
+        std::cout << errMsg << std::endl;
+        throw std::runtime_error(errMsg);
+    }
+}
+
+bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals) {
+    // First we do some error checking
+    if (inputs.empty()) {
         std::cout << "===== Error =====" << std::endl;
         std::cout << "Provided input vector is empty!" << std::endl;
         return false;
     }
 
     if (!m_options.doesSupportDynamicBatchSize) {
-        if (inputFaceChips.size() > 1) {
+        if (inputs.size() > 1) {
             std::cout << "===== Error =====" << std::endl;
             std::cout << "Model does not support running batch inference!" << std::endl;
             std::cout << "Please only provide a single input" << std::endl;
@@ -228,117 +250,82 @@ bool Engine::runInference(const std::vector<cv::Mat> &inputFaceChips, std::vecto
         }
     }
 
-    auto dims = m_engine->getBindingDimensions(0);
+    auto inputDimsOriginal = m_engine->getBindingDimensions(0);
+    auto batchSize = static_cast<int32_t>(inputs.size());
 
-    int32_t outputL = 1;
-    auto outputDims = m_engine->getBindingDimensions(1);
-    for(int j=0; j<outputDims.nbDims; j++) {
-        if (outputDims.d[j] != -1) {
-            // Models with dynamic batch size will have first input dimension of -1, models with static batch size will not.
-            outputL *= outputDims.d[j];
-        }
-    }
-
-    auto batchSize = static_cast<int32_t>(inputFaceChips.size());
-    Dims4 inputDims = {batchSize, dims.d[1], dims.d[2], dims.d[3]};
-
-    auto& inputFaceChip = inputFaceChips[0];
-    if (inputFaceChip.channels() != dims.d[1] ||
-        inputFaceChip.rows != dims.d[2] ||
-        inputFaceChip.cols != dims.d[3]) {
+    auto& input = inputs[0];
+    if (input.channels() != inputDimsOriginal.d[1] ||
+        input.rows != inputDimsOriginal.d[2] ||
+        input.cols != inputDimsOriginal.d[3]) {
         std::cout << "===== Error =====" << std::endl;
         std::cout << "Input does not have correct size!" << std::endl;
-        std::cout << "Execpted: (" << dims.d[1] << ", " << dims.d[2] << ", " << dims.d[3] << ")"  << std::endl;
-        std::cout << "Got: (" << inputFaceChip.channels() << ", " << inputFaceChip.rows << ", " << inputFaceChip.cols << ")" << std::endl;
+        std::cout << "Execpted: (" << inputDimsOriginal.d[1] << ", " << inputDimsOriginal.d[2] << ", " << inputDimsOriginal.d[3] << ")"  << std::endl;
+        std::cout << "Got: (" << input.channels() << ", " << input.rows << ", " << input.cols << ")" << std::endl;
         std::cout << "Ensure you resize your input image to the correct size" << std::endl;
         return false;
     }
 
-    m_context->setBindingDimensions(0, inputDims);
+    nvinfer1::Dims4 inputDims = {batchSize, inputDimsOriginal.d[1], inputDimsOriginal.d[2], inputDimsOriginal.d[3]};
+    m_context->setBindingDimensions(0, inputDims); // Define the batch size
 
     if (!m_context->allInputDimensionsSpecified()) {
-        throw std::runtime_error("Error, not all input dimensions specified.");
+        throw std::runtime_error("Error, not all required dimensions specified.");
     }
 
-    // Only reallocate buffers if the batch size has changed
-    if (m_prevBatchSize != inputFaceChips.size()) {
+    // Copy over the input data and perform the preprocessing
+    cv::cuda::GpuMat gpu_dst(1, inputs[0].rows * inputs[0].cols * inputs.size() , CV_8UC3);
 
-        m_inputBuff.hostBuffer.resize(inputDims);
-        m_inputBuff.deviceBuffer.resize(inputDims);
-
-        Dims2 outputDims {batchSize, outputL};
-        m_outputBuff.hostBuffer.resize(outputDims);
-        m_outputBuff.deviceBuffer.resize(outputDims);
-
-        m_prevBatchSize = batchSize;
+    size_t width = inputs[0].cols * inputs[0].rows;
+    for (size_t img=0; img< inputs.size(); img++) {
+        std::vector<cv::cuda::GpuMat> input_channels {
+                cv::cuda::GpuMat(inputs[0].rows, inputs[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img])),
+                cv::cuda::GpuMat(inputs[0].rows, inputs[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
+                cv::cuda::GpuMat(inputs[0].rows, inputs[0].cols, CV_8U, &(gpu_dst.ptr()[width * 2 + width * 3 * img]))
+        };
+        cv::cuda::split(inputs[img], input_channels);  // HWC -> CHW
     }
 
-    auto* hostDataBuffer = static_cast<float*>(m_inputBuff.hostBuffer.data());
+    cv::cuda::GpuMat mfloat;
+    gpu_dst.convertTo(mfloat, CV_32FC3, 1.f / 255.f);
 
-    for (size_t batch = 0; batch < inputFaceChips.size(); ++batch) {
-        auto image = inputFaceChips[batch];
+    // Subtract mean normalize
+    cv::cuda::subtract(mfloat, cv::Scalar(subVals[0], subVals[1], subVals[2]), mfloat, cv::noArray(), -1);
+    cv::cuda::divide(mfloat, cv::Scalar(divVals[0], divVals[1], divVals[2]), mfloat, 1, -1);
 
-        // Preprocess code
-        image.convertTo(image, CV_32FC3, 1.f / 255.f);
-        cv::subtract(image, cv::Scalar(0.5f, 0.5f, 0.5f), image, cv::noArray(), -1);
-        cv::divide(image, cv::Scalar(0.5f, 0.5f, 0.5f), image, 1, -1);
+    auto *dataPointer = mfloat.ptr<void>();
 
-        // NHWC to NCHW conversion
-        // NHWC: For each pixel, its 3 colors are stored together in RGB order.
-        // For a 3 channel image, say RGB, pixels of the R channel are stored first, then the G channel and finally the B channel.
-        // https://user-images.githubusercontent.com/20233731/85104458-3928a100-b23b-11ea-9e7e-95da726fef92.png
-        int offset = dims.d[1] * dims.d[2] * dims.d[3] * batch;
-        int r = 0 , g = 0, b = 0;
-        for (int i = 0; i < dims.d[1] * dims.d[2] * dims.d[3]; ++i) {
-            if (i % 3 == 0) {
-                hostDataBuffer[offset + r++] = *(reinterpret_cast<float*>(image.data) + i);
-            } else if (i % 3 == 1) {
-                hostDataBuffer[offset + g++ + dims.d[2]*dims.d[3]] = *(reinterpret_cast<float*>(image.data) + i);
-            } else {
-                hostDataBuffer[offset + b++ + dims.d[2]*dims.d[3]*2] = *(reinterpret_cast<float*>(image.data) + i);
-            }
-        }
-    }
-
-    // Copy from CPU to GPU
-    auto ret = cudaMemcpyAsync(m_inputBuff.deviceBuffer.data(), m_inputBuff.hostBuffer.data(), m_inputBuff.hostBuffer.nbBytes(), cudaMemcpyHostToDevice, m_cudaStream);
-    if (ret != 0) {
-        return false;
-    }
-
-    std::vector<void*> predicitonBindings = {m_inputBuff.deviceBuffer.data(), m_outputBuff.deviceBuffer.data()};
+    // Create the cuda stream that will be used for inference
+    cudaStream_t inferenceCudaStream;
+    checkCudaErrorCode(cudaStreamCreate(&inferenceCudaStream));
+    checkCudaErrorCode(cudaMemcpyAsync(m_buffers[0], dataPointer, mfloat.cols * mfloat.rows * mfloat.channels() * sizeof(float), cudaMemcpyDeviceToDevice, inferenceCudaStream));
 
     // Run inference.
-    bool status = m_context->enqueueV2(predicitonBindings.data(), m_cudaStream, nullptr);
+    bool status = m_context->enqueueV2(m_buffers.data(), inferenceCudaStream, nullptr);
     if (!status) {
         return false;
     }
 
-    // Copy the results back to CPU memory
-    ret = cudaMemcpyAsync(m_outputBuff.hostBuffer.data(), m_outputBuff.deviceBuffer.data(), m_outputBuff.deviceBuffer.nbBytes(), cudaMemcpyDeviceToHost, m_cudaStream);
-    if (ret != 0) {
-        std::cout << "===== Error =====" << std::endl;
-        std::cout << "Unable to copy buffer from GPU back to CPU" << std::endl;
-        return false;
-    }
+    // Copy the outputs back to CPU
+    featureVectors.clear();
 
-    ret = cudaStreamSynchronize(m_cudaStream);
-    if (ret != 0) {
-        std::cout << "===== Error =====" << std::endl;
-        std::cout << "Unable to synchronize cuda stream" << std::endl;
-        return false;
-    }
-
-    // Copy to output
     for (int batch = 0; batch < batchSize; ++batch) {
-        std::vector<float> featureVector;
-        featureVector.resize(outputL);
-
-        memcpy(featureVector.data(), reinterpret_cast<const char*>(m_outputBuff.hostBuffer.data()) +
-        batch * outputL * sizeof(float), outputL * sizeof(float ));
-        featureVectors.emplace_back(std::move(featureVector));
+        // Batch
+        std::vector<std::vector<float>> batchOutputs{};
+        for (int outputBinding = 1; outputBinding < m_engine->getNbBindings(); ++outputBinding) {
+            // First binding is the input which is why we start at index 1
+            std::vector<float> output;
+            auto outputLenFloat = m_outputLengthsFloat[outputBinding - 1];
+            output.resize(outputLenFloat);
+            // Copy the output
+            checkCudaErrorCode(cudaMemcpyAsync(output.data(), static_cast<char*>(m_buffers[outputBinding]) + (batch * sizeof(float) * outputLenFloat), outputLenFloat * sizeof(float), cudaMemcpyDeviceToHost, inferenceCudaStream));
+            batchOutputs.emplace_back(std::move(output));
+        }
+        featureVectors.emplace_back(std::move(batchOutputs));
     }
 
+    // Synchronize the cuda stream
+    checkCudaErrorCode(cudaStreamSynchronize(inferenceCudaStream));
+    checkCudaErrorCode(cudaStreamDestroy(inferenceCudaStream));
     return true;
 }
 
@@ -363,14 +350,8 @@ std::string Engine::serializeEngineOptions(const Options &options) {
         engineName += ".fp32";
     }
 
-    engineName += "." + std::to_string(options.maxBatchSize) + ".";
-    for (size_t i = 0; i < m_options.optBatchSizes.size(); ++i) {
-        engineName += std::to_string(m_options.optBatchSizes[i]);
-        if (i != m_options.optBatchSizes.size() - 1) {
-            engineName += "_";
-        }
-    }
-
+    engineName += "." + std::to_string(options.maxBatchSize);
+    engineName += "." + std::to_string(options.optBatchSize);
     engineName += "." + std::to_string(options.maxWorkspaceSize);
 
     return engineName;
@@ -386,4 +367,15 @@ void Engine::getDeviceNames(std::vector<std::string>& deviceNames) {
 
         deviceNames.push_back(std::string(prop.name));
     }
+}
+
+cv::cuda::GpuMat Engine::resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat &input, size_t newDim, const cv::Scalar &bgcolor) {
+    float r = std::min(newDim / (input.cols * 1.0), newDim / (input.rows * 1.0));
+    int unpad_w = r * input.cols;
+    int unpad_h = r * input.rows;
+    cv::cuda::GpuMat re(unpad_h, unpad_w, CV_8UC3);
+    cv::cuda::resize(input, re, re.size());
+    cv::cuda::GpuMat out(newDim, newDim, CV_8UC3, bgcolor);
+    re.copyTo(out(cv::Rect(0, 0, re.cols, re.rows)));
+    return out;
 }

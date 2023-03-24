@@ -1,9 +1,10 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
-
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudawarping.hpp>
+#include <opencv2/cudaarithm.hpp>
 #include "NvInfer.h"
-#include "buffers.h"
 
 // Precision used for GPU inference
 enum class Precision {
@@ -16,8 +17,8 @@ struct Options {
     bool doesSupportDynamicBatchSize = true;
     // Precision to use for GPU inference. 16 bit is faster but may reduce accuracy.
     Precision precision = Precision::FP16;
-    // Batch sizes to optimize for.
-    std::vector<int32_t> optBatchSizes {};
+    // The batch size which should be optimized for.
+    int32_t optBatchSize = 1;
     // Maximum allowable batch size
     int32_t maxBatchSize = 16;
     // Max allowable GPU memory to be used for model conversion, in bytes.
@@ -42,12 +43,14 @@ public:
     // Load and prepare the network for inference
     bool loadNetwork();
     // Run inference.
-    bool runInference(const std::vector<cv::Mat>& inputFaceChips, std::vector<std::vector<float>>& featureVectors);
+    bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f}, const std::array<float, 3>& divVals = {1.f, 1.f, 1.f});
 
     int32_t getInputHeight() const { return m_inputH; };
     int32_t getInputWidth() const { return m_inputW; };
-private:
 
+    // Utility method
+    static cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t newDim, const cv::Scalar& bgcolor = cv::Scalar(0, 0, 0));
+private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options);
 
@@ -55,16 +58,18 @@ private:
 
     bool doesFileExist(const std::string& filepath);
 
+    // Holds pointers to the input and output GPU buffers
+    std::vector<void*> m_buffers;
+    std::vector<uint32_t> m_outputLengthsFloat{};
+
     std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
-    const Options& m_options;
+    Options m_options;
     Logger m_logger;
-    samplesCommon::ManagedBuffer m_inputBuff;
-    samplesCommon::ManagedBuffer m_outputBuff;
-    size_t m_prevBatchSize = 0;
     std::string m_engineName;
-    cudaStream_t m_cudaStream = nullptr;
 
     int32_t m_inputH = 0;
     int32_t m_inputW = 0;
+
+    inline void checkCudaErrorCode(cudaError_t code);
 };

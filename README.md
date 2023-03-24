@@ -33,19 +33,21 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - How to install TensorRT on Ubuntu 20.04
 - How to generate a TRT engine file optimized for your GPU
 - How to specify a simple optimization profile
-- How to read / write data from / into GPU memory
-- How to run synchronous inference
-- How to work with models with dynamic batch sizes
+- How to read / write data from / into GPU memory and work with GPU images.
+- How to use cuda stream to run async inference and later synchronize. 
+- How to work with models with static and dynamic batch sizes
+- **New:** Supports models with multiple outputs (and even works with batching!)
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
 You will need to supply your own onnx model for this sample code. Ensure to specify a dynamic batch size when exporting the onnx model if you would like to use batching. If not, you will need to set `Options.doesSupportDynamicBatchSize` to false.
 
 ### Prerequisites
+- Install OpenCV with cuda support. Instructions can be found [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7)
 - `sudo apt install build-essential`
 - `sudo apt install python3-pip`
 - `pip3 install cmake`
-- Download TensorRT from here: https://developer.nvidia.com/nvidia-tensorrt-8x-download
+- Download TensorRT from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download)
 - Extract, and then navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation
 
 ### Building the library
@@ -54,12 +56,24 @@ You will need to supply your own onnx model for this sample code. Ensure to spec
 - `make -j$(nproc)`
 
 ### Sanity check
-- To perform a sanity check, download the following [ArcFace model](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface) from [here](https://github.com/onnx/models/blob/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx)
-- Set `Options.doesSupportDynamicBatchSize` to `false` before passing it the `Options` to the `Engine` constructor on [this](https://github.com/cyrusbehr/tensorrt-cpp-api/blob/003b72ba032d40afee241adeb7ebe7ca1ea685ca/src/main.cpp#L12) line.
-- Running inference using said model and the image located in `inputs/img.jpg` should produce the following feature vector:
+- To perform a sanity check, download the following [ArcFace model](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface) from [here](https://github.com/onnx/models/blob/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx) and place it in the `./models` directory.
+- Make sure `Options.doesSupportDynamicBatchSize` is set to `false` before passing it the `Options` to the `Engine` constructor on [this](https://github.com/cyrusbehr/tensorrt-cpp-api/blob/003b72ba032d40afee241adeb7ebe7ca1ea685ca/src/main.cpp#L12) line.
+- Uncomment the code for printing out the feature vector at the bottom of `./src/main.cpp`.
+- Running inference using said model and the image located in `inputs/face_chip.jpg` should produce the following feature vector:
 ```text
- -0.056427 -0.103394 0.175171 0.160767 0.229492 0.218628 -0.302002 -0.0628662 0.246094 -0.18457 0.143433 -0.0447693 -0.549805 0.103638 -0.1427 -0.0728149 -0.209595 -0.00379181 0.0736084 0.0539551 0.193848 0.208862 0.0360718 -0.105042 0.114075 -0.161621 0.127808 0.0889282 0.25708 0.276367 -0.0202332 -0.11438 -0.155762 0.0566711 0.0561523 -0.117065 0.0668945 0.0686035 -0.143066 -0.186523 -0.0896606 -0.195435 -0.0584412 -0.0301971 0.107727 0.662109 0.440186 -0.281006 0.100281 0.000717163 -0.0494385 -0.234741 -0.163086 -0.000991821 -0.221069 0.196899 0.0396118 -0.00531006 0.12915 0.192871 0.112793 -0.170654 -0.0673828 0.16626 0.173828 0.237549 0.0310364 0.100952 0.0923462 -0.0878296 0.385742 -0.0996704 0.402344 0.453613 -0.208862 -0.0928955 0.01651 0.210693 -0.223877 -0.320801 0.206665 0.314453 -0.0788574 -0.00538635 -0.413574 -0.0994873 -0.00650787 -0.164551 -0.00382996 -0.416016 0.032959 -0.164551 -0.00775909 0.060791 -0.0610657 -0.248779 0.269043 0.0044632 0.0623169 -0.06427 -0.322266 0.284668 -0.229614 0.13147 0.227539 -0.127563 0.323486 0.345215 -0.20459 -0.106812 0.0120697 -0.349121 -0.0441895 0.366699 -0.0715332 -0.18042 -0.0255127 -0.191406 0.148438 0.272705 -0.0386047 0.00587463 0.101379 -0.0361328 0.100647 0.0372314 -0.385254 0.139893 -0.119995 0.161743 0.0103912 0.101257 0.316162 -0.212891 0.196167 -0.243774 0.0820312 0.254639 0.372314 0.206299 0.384766 0.152222 -0.189209 -0.0224609 0.276855 -0.187744 0.241333 0.0455627 0.341553 0.279053 -0.0925293 0.109009 0.15686 -0.486572 -0.422607 0.0974731 0.118713 -0.0445557 -0.137329 0.197998 -0.409668 -0.0125122 -0.043457 0.268066 0.232422 -0.236328 0.211304 -0.297119 -0.337891 -0.0608521 0.272217 -0.030899 0.0241089 0.30542 0.0377502 -0.00152588 -0.129883 0.1875 -0.0330505 0.086792 -0.168579 0.308838 0.120361 0.167603 -0.258789 0.113098 0.0838623 -0.393799 0.133423 -0.307861 -0.269775 0.238159 -0.165527 0.30957 -0.090332 0.448975 -0.228516 -0.321289 -0.335205 -0.159668 0.171387 0.381348 -0.173218 -0.00642776 0.0354004 0.0402222 0.190674 -0.0734863 0.0871582 -0.271973 0.0346069 -0.0269165 -0.0958252 0.121826 0.0669556 0.349854 -0.0487976 0.136475 0.0459595 0.0808105 -0.0075531 -0.171753 0.456299 -0.303467 0.00244141 0.162842 -0.11908 -0.280273 -0.178223 0.226929 -0.103271 -0.167114 -0.164917 0.252197 0.0378113 -0.311279 0.0686035 0.479736 0.109924 0.231567 -0.00250244 0.172729 0.27832 -0.153687 -0.0302887 0.454834 -0.097168 -0.0881348 0.0332947 -0.371094 -0.212646 -0.00823975 -0.0382385 -0.121521 0.28418 -0.0439148 0.183472 0.191895 -0.235474 -0.00370216 0.140381 -0.00245667 -0.192139 -0.167969 0.250244 -0.0140915 -0.108032 -0.376221 -0.191284 0.376221 0.376709 0.647461 0.0670776 0.145874 -0.0662842 -0.129761 -0.0640869 0.0118561 0.0665894 0.10376 0.0493164 -0.276611 0.150757 -0.266113 0.0397339 -0.00216675 0.0217896 -0.280029 0.147827 0.0738525 0.219604 -0.255859 -0.0190735 -0.0428467 0.366943 0.102356 -0.21875 0.028183 -0.249878 -0.11792 0.150391 0.228882 -0.28833 0.224121 0.0966187 0.0693359 -0.218506 0.112976 -0.0422363 0.173096 0.340576 0.101074 -0.0239868 -0.344238 0.051239 0.00758362 0.0124283 -0.00265121 -0.107788 0.328857 -0.0585938 -0.101318 -0.203247 0.10199 -0.181396 -0.0925903 -0.00713348 -0.311768 0.0161743 -0.00341797 -0.471924 0.378906 -0.0447998 -0.101807 0.111572 -0.0628052 0.318848 -0.305664 0.0892334 0.170654 -0.171387 -0.205811 0.46875 0.0949707 -0.081604 0.176636 0.0392456 0.191406 -0.318359 0.0762939 0.160522 0.302246 0.322266 0.147583 -0.0943604 -0.102356 0.223755 0.466797 0.311768 0.152344 0.290283 -0.0789795 0.00592041 -0.185303 -0.164917 -0.345215 -0.538086 -0.0131454 -0.166748 0.326416 0.00854492 0.344727 0.025238 -0.355225 -0.0701904 -0.182007 -0.240723 0.151001 -0.0919189 -0.0955811 -0.297852 -0.127441 0.0255432 0.101318 0.326416 0.108032 0.205688 -0.0690308 -0.0333252 0.348633 0.235352 -0.272217 -0.163818 -0.0198669 0.0183716 -0.245972 0.121033 -0.0698242 0.0653687 -0.694824 0.195068 0.213989 -0.127686 0.242065 -0.159302 0.440186 -0.0303192 0.105225 -0.286133 0.128052 -0.521973 0.0350037 0.231079 -0.295898 0.202393 -0.129883 0.287598 0.370361 -0.0568848 -0.120544 -0.193604 -0.489258 0.211548 -0.125366 0.18457 -0.245239 -0.506348 -0.137939 -0.256592 0.21228 0.106873 0.123962 -0.159424 0.0182037 -0.074646 0.032074 0.737305 -0.0169983 -0.271484 0.401123 -0.016983 0.26709 -0.0279236 0.058197 -0.156616 -0.0923462 0.273438 0.112549 -0.0428162 0.248657 0.0932007 -0.301514 -0.306885 -0.138794 -0.00793457 -0.276367 0.100891 0.0789795 0.32666 0.0445251 -0.291504 -0.061615 -0.126099 0.0321045 0.10498 -0.231323 -0.513672 0.103882 0.139282 -0.562012 -0.0856323 -0.192383 -0.116638 0.24231 0.169922 -0.239258 0.0418701 0.0380859 -0.00545502 0.228638 -0.478271 0.162354 -0.299561 0.238037 0.12854 0.174927 -0.06073 -0.0212097 0.184204 0.11145 0.133545 0.14856 -0.325928 -0.374756 0.171387 0.0958252 0.0189209 -0.300049 0.0458374 -0.581055 -0.0536499 -0.222534 -0.12915 -0.0228271 -0.132324 -0.162842 0.00682068 0.101685 -0.0853882 0.299316 0.214844 0.409912
+-0.0548096 -0.0994873 0.176514 0.161377 0.226807 0.215942 -0.296143 -0.0601807 0.240112 -0.18457 ...
 ```
+
+### Changelog
+
+**V2.0**
+
+- Requires OpenCV cuda to be installed. To install, follow instructions [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7).
+- `Options.optBatchSizes` has been removed, replaced by `Options.optBatchSize`.
+- Support models with more than a single output (ex. SCRFD).  
+- Added support for models which do not support batch inference (first input dimension is fixed).
+- More error checking.
+- Fixed a bunch of common issues people were running into with the original V1.0 version.
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
