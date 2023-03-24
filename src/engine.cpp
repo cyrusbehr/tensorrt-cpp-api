@@ -265,7 +265,6 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
 
     // Allocate buffers for the outputs
     int numOutputs = 0;
-    uint32_t totalOutputLenFloat = 0;
     std::vector<uint32_t> outputLenghtsFloat{};
     for (int i = 1; i < m_engine->getNbBindings(); ++i) {
         if (m_engine->bindingIsInput(i)) {
@@ -283,7 +282,6 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
         }
 
         outputLenghtsFloat.push_back(outputLenFloat);
-        totalOutputLenFloat += outputLenFloat;
         // Now size the output buffer appropriately, taking into account the batch size
         // TODO Cyrus: Perhaps this code should be in the loadModel method, and we allocate buffers of the largest batch size
         // TODO Cyrus: that way we avoid reallocating on every iteration of the loop
@@ -309,7 +307,7 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
             auto outputLenFloat = outputLenghtsFloat[outputBinding - 1];
             output.resize(outputLenFloat);
             // Copy the output
-            checkCudaErrorCode(cudaMemcpyAsync(output.data(), static_cast<char*>(buffers[outputBinding]) + (batch * sizeof(float) * totalOutputLenFloat), outputLenFloat * sizeof(float), cudaMemcpyDeviceToHost, inferenceCudaStream));
+            checkCudaErrorCode(cudaMemcpyAsync(output.data(), static_cast<char*>(buffers[outputBinding]) + (batch * sizeof(float) * outputLenFloat), outputLenFloat * sizeof(float), cudaMemcpyDeviceToHost, inferenceCudaStream));
             batchOutputs.emplace_back(std::move(output));
         }
         featureVectors.emplace_back(std::move(batchOutputs));
