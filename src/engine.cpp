@@ -23,6 +23,11 @@ bool Engine::doesFileExist(const std::string &filepath) {
 
 Engine::Engine(const Options &options)
     : m_options(options) {
+    if (!m_options.doesSupportDynamicBatchSize) {
+        std::cout << "Model does not support dynamic batch size, using optBatchSize and maxBatchSize of 1" << std::endl;
+        m_options.optBatchSize = 1;
+        m_options.maxBatchSize = 1;
+    }
 }
 
 bool Engine::build(std::string onnxModelPath) {
@@ -48,10 +53,8 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
-    if (m_options.doesSupportDynamicBatchSize) {
-        // Set the max supported batch size
-        builder->setMaxBatchSize(m_options.maxBatchSize);
-    }
+    // Set the max supported batch size
+    builder->setMaxBatchSize(m_options.maxBatchSize);
 
     // Define an explicit batch size and then create the network.
     // More info here: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#explicit-implicit-batch
@@ -101,13 +104,8 @@ bool Engine::build(std::string onnxModelPath) {
     // Specify the optimization profile
     IOptimizationProfile *optProfile = builder->createOptimizationProfile();
     optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-    if (m_options.doesSupportDynamicBatchSize) {
-        optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
-        optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
-    } else {
-        optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(1, inputC, inputH, inputW));
-        optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(1, inputC, inputH, inputW));
-    }
+    optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
+    optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
     config->addOptimizationProfile(optProfile);
 
     config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);

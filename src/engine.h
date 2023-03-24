@@ -64,7 +64,7 @@ private:
 
     std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
-    const Options& m_options;
+    Options m_options;
     Logger m_logger;
     std::string m_engineName;
 
