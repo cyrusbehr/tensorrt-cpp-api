@@ -37,7 +37,7 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - How to use cuda stream to run async inference and later synchronize. 
 - How to work with models with static and dynamic batch sizes
 - **New:** Supports models with multiple outputs (and even works with batching!)
-- The code can be used as a base for many models, including [Insightface](https://github.com/deepinsight/insightface) ArcFace, YoloV7, SCRFD face detection, etc. You will just need to implement the appropriate post-processing code.
+- The code can be used as a base for many models, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV7](https://github.com/WongKinYiu/yolov7), [SCRFD](https://insightface.ai/scrfd) face detection, and many other single input - single / multiple output models. You will just need to implement the appropriate post-processing code.
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
