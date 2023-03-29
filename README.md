@@ -75,6 +75,7 @@ You will need to supply your own onnx model for this sample code. Ensure to spec
 - Added support for models which do not support batch inference (first input dimension is fixed).
 - More error checking.
 - Fixed a bunch of common issues people were running into with the original V1.0 version.
+- Remove whitespace from GPU device name 
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->

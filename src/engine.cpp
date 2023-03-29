@@ -341,6 +341,9 @@ std::string Engine::serializeEngineOptions(const Options &options) {
     }
 
     auto deviceName = deviceNames[options.deviceIndex];
+    // Remove spaces from the device name
+    deviceName.erase(std::remove_if(deviceName.begin(), deviceName.end(), ::isspace), deviceName.end());
+
     engineName+= "." + deviceName;
 
     // Serialize the specified options into the filename
