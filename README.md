@@ -41,7 +41,7 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
-You will need to supply your own onnx model for this sample code. Ensure to specify a dynamic batch size when exporting the onnx model if you would like to use batching. If not, you will need to set `Options.doesSupportDynamicBatchSize` to false.
+You will need to supply your own onnx model for this sample code, or you can download the sample model (see Sanity Check section below). Ensure to specify a dynamic batch size when exporting the onnx model if you would like to use batching. If not, you will need to set `Options.doesSupportDynamicBatchSize` to false.
 
 ### Prerequisites
 - Install OpenCV with cuda support. Instructions can be found [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7)
