@@ -101,8 +101,8 @@ int main() {
     " ms, for batch size of: " << images.size() << std::endl;
 
     // Print the feature vectors
-    for (int batch = 0; batch < featureVectors.size(); ++batch) {
-        for (int outputNum = 0; outputNum < featureVectors[batch].size(); ++outputNum) {
+    for (size_t batch = 0; batch < featureVectors.size(); ++batch) {
+        for (size_t outputNum = 0; outputNum < featureVectors[batch].size(); ++outputNum) {
             std::cout << "Batch " << batch << ", " << "output " << outputNum << std::endl;
             int i = 0;
             for (const auto &e:  featureVectors[batch][outputNum]) {
