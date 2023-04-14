@@ -43,13 +43,13 @@ public:
     // Load and prepare the network for inference
     bool loadNetwork();
     // Run inference.
-    bool runInference(const std::vector<cv::cuda::GpuMat>& inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f}, const std::array<float, 3>& divVals = {1.f, 1.f, 1.f});
-
-    int32_t getInputHeight() const { return m_inputH; };
-    int32_t getInputWidth() const { return m_inputW; };
+    // Input format [input][batch][image]
+    bool runInference(const std::vector<std::vector<cv::cuda::GpuMat>>& inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f}, const std::array<float, 3>& divVals = {1.f, 1.f, 1.f});
 
     // Utility method
     static cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t newDim, const cv::Scalar& bgcolor = cv::Scalar(0, 0, 0));
+
+    const std::vector<nvinfer1::Dims3>& getInputDims() const { return m_inputDims; };
 private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options);
@@ -61,15 +61,13 @@ private:
     // Holds pointers to the input and output GPU buffers
     std::vector<void*> m_buffers;
     std::vector<uint32_t> m_outputLengthsFloat{};
+    std::vector<nvinfer1::Dims3> m_inputDims;
 
     std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
     Options m_options;
     Logger m_logger;
     std::string m_engineName;
-
-    int32_t m_inputH = 0;
-    int32_t m_inputW = 0;
 
     inline void checkCudaErrorCode(cudaError_t code);
 };

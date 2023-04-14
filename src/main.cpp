@@ -8,7 +8,7 @@ int main() {
     // Specify our GPU inference configuration options
     Options options;
     // TODO: If your model only supports a static batch size
-    options.doesSupportDynamicBatchSize = false;
+    options.doesSupportDynamicBatchSize = true; // TODO Cyrus: Change this to back to false so that the sample model will work. Add to readme stating that needs to be changed to true for other models.
     options.precision = Precision::FP16; // Use fp16 precision for faster inference.
 
     if (options.doesSupportDynamicBatchSize) {
@@ -21,7 +21,7 @@ int main() {
     // TODO: Specify your model here.
     // Must specify a dynamic batch size when exporting the model from onnx.
     // If model only specifies a static batch size, must set the above variable doesSupportDynamicBatchSize to false.
-    const std::string onnxModelpath = "../models/arcfaceresnet100-8.onnx";
+    const std::string onnxModelpath = "../models/spoof.onnx"; // TODO Cyrus: Change this back.
 
     bool succ = engine.build(onnxModelpath);
     if (!succ) {
@@ -49,40 +49,35 @@ int main() {
     cv::cuda::GpuMat img;
     img.upload(cpuImg);
 
-    // TODO: If the model expects a different input size, resize it here.
-    // You can choose to resize by scaling, adding padding, or a conbination of the two in order to maintain the aspect ratio
-    // You can use the Engine::resizeKeepAspectRatioPadRightBottom to resize to a square while maintain the aspect ratio (adds padding where necessary to achieve this).
-    // If you are running the sample code using the suggested model, then the input image already has the correct size.
 
-    if (img.cols != engine.getInputWidth() ||
-        img.rows != engine.getInputHeight()) {
-        std::cout << "The image is not the right size of the model!" << std::endl;
-        std::cout << "The model expects: (" << engine.getInputHeight() << "x" << engine.getInputWidth() << ")" << std::endl;
-        std::cout << "Provided input image: (" << img.rows << "x" << img.cols << ")" << std::endl;
-        std::cout << "You must either resize your image, add padding, or source images of the correct input size" << std::endl;
-        // TODO: This means you forgot to resize your image.
-        // I have deliberately left this part empty as it depends on your implementation.
-        // You may want to resize while maintaining the aspect ratio (with use of padding).
-        // You may want to only add padding without resizing
-        // Or you may want to only use inputs which are already sized correctly (this is the case
-        // for us as we are using face chips from a face detector pipeline).
-        return -1;
-    }
+    // Populate the input vectors
+    const auto& inputDims = engine.getInputDims();
+    std::vector<std::vector<cv::cuda::GpuMat>> inputs;
 
-    std::vector<cv::cuda::GpuMat> images;
-    for (size_t i = 0; i < batchSize; ++i) {
-        images.push_back(img);
+    for (const auto & inputDim : inputDims) {
+        std::vector<cv::cuda::GpuMat> input;
+        for (size_t j = 0; j < batchSize; ++j) {
+            cv::cuda::GpuMat resized;
+            // TODO:
+            // You can choose to resize by scaling, adding padding, or a conbination of the two in order to maintain the aspect ratio
+            // You can use the Engine::resizeKeepAspectRatioPadRightBottom to resize to a square while maintain the aspect ratio (adds padding where necessary to achieve this).
+            // If you are running the sample code using the suggested model, then the input image already has the correct size.
+            // The following resizes without maintaining aspect ratio so use carefully!
+            cv::cuda::resize(img, resized, cv::Size(inputDim.d[1], inputDim.d[2]));
+            input.emplace_back(std::move(resized));
+        }
+        inputs.emplace_back(std::move(input));
     }
 
     // Define our preprocessing code
-    // Default values are between 0 --> 1
-    // The following values with transform the input range to -1 --> 1
+    // The default Engine::runInference method will normalize values between 0 --> 1
+    // However, using the following, we choose to instead normalize to a -1 --> 1 range.
     std::array<float, 3> subVals {0.5f, 0.5f, 0.5f};
     std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
 
     // Discard the first inference time as it takes longer
     std::vector<std::vector<std::vector<float>>> featureVectors;
-    succ = engine.runInference(images, featureVectors, subVals, divVals);
+    succ = engine.runInference(inputs, featureVectors, subVals, divVals);
     if (!succ) {
         throw std::runtime_error("Unable to run inference.");
     }
@@ -92,29 +87,29 @@ int main() {
     auto t1 = Clock::now();
     for (size_t i = 0; i < numIterations; ++i) {
         featureVectors.clear();
-        engine.runInference(images, featureVectors, subVals, divVals);
+        engine.runInference(inputs, featureVectors, subVals, divVals);
     }
     auto t2 = Clock::now();
     double totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
 
-    std::cout << "Success! Average time per inference: " << totalTime / numIterations / static_cast<float>(images.size()) <<
-    " ms, for batch size of: " << images.size() << std::endl;
+    std::cout << "Success! Average time per inference: " << totalTime / numIterations / static_cast<float>(inputs[0].size()) <<
+    " ms, for batch size of: " << inputs[0].size() << std::endl;
 
     // Print the feature vectors
-//    for (size_t batch = 0; batch < featureVectors.size(); ++batch) {
-//        for (size_t outputNum = 0; outputNum < featureVectors[batch].size(); ++outputNum) {
-//            std::cout << "Batch " << batch << ", " << "output " << outputNum << std::endl;
-//            int i = 0;
-//            for (const auto &e:  featureVectors[batch][outputNum]) {
-//                std::cout << e << " ";
-//                if (++i == 10) {
-//                    std::cout << "...";
-//                    break;
-//                }
-//            }
-//            std::cout << "\n" << std::endl;
-//        }
-//    }
+    for (size_t batch = 0; batch < featureVectors.size(); ++batch) {
+        for (size_t outputNum = 0; outputNum < featureVectors[batch].size(); ++outputNum) {
+            std::cout << "Batch " << batch << ", " << "output " << outputNum << std::endl;
+            int i = 0;
+            for (const auto &e:  featureVectors[batch][outputNum]) {
+                std::cout << e << " ";
+                if (++i == 10) {
+                    std::cout << "...";
+                    break;
+                }
+            }
+            std::cout << "\n" << std::endl;
+        }
+    }
 
     // TODO: If your model requires post processing (ex. convert feature vector into bounding boxes) then you would do so here.
 
