@@ -101,20 +101,20 @@ int main() {
     " ms, for batch size of: " << images.size() << std::endl;
 
     // Print the feature vectors
-    for (size_t batch = 0; batch < featureVectors.size(); ++batch) {
-        for (size_t outputNum = 0; outputNum < featureVectors[batch].size(); ++outputNum) {
-            std::cout << "Batch " << batch << ", " << "output " << outputNum << std::endl;
-            int i = 0;
-            for (const auto &e:  featureVectors[batch][outputNum]) {
-                std::cout << e << " ";
-                if (++i == 10) {
-                    std::cout << "...";
-                    break;
-                }
-            }
-            std::cout << "\n" << std::endl;
-        }
-    }
+//    for (size_t batch = 0; batch < featureVectors.size(); ++batch) {
+//        for (size_t outputNum = 0; outputNum < featureVectors[batch].size(); ++outputNum) {
+//            std::cout << "Batch " << batch << ", " << "output " << outputNum << std::endl;
+//            int i = 0;
+//            for (const auto &e:  featureVectors[batch][outputNum]) {
+//                std::cout << e << " ";
+//                if (++i == 10) {
+//                    std::cout << "...";
+//                    break;
+//                }
+//            }
+//            std::cout << "\n" << std::endl;
+//        }
+//    }
 
     // TODO: If your model requires post processing (ex. convert feature vector into bounding boxes) then you would do so here.
 
