@@ -75,14 +75,17 @@ int main() {
     }
 
     // Define our preprocessing code
-    // The default Engine::runInference method will normalize values between 0 --> 1
-    // However, using the following, we choose to instead normalize to a -1 --> 1 range.
+    // The default Engine::runInference method will normalize values between [0.f, 1.f]
+    // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).
+
+    // For our model, we need the values to be normalized between [-1.f, 1.f] so we use the following params
     std::array<float, 3> subVals {0.5f, 0.5f, 0.5f};
     std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
+    bool normalize = true;
 
     // Discard the first inference time as it takes longer
     std::vector<std::vector<std::vector<float>>> featureVectors;
-    succ = engine.runInference(inputs, featureVectors, subVals, divVals);
+    succ = engine.runInference(inputs, featureVectors, subVals, divVals, normalize);
     if (!succ) {
         throw std::runtime_error("Unable to run inference.");
     }

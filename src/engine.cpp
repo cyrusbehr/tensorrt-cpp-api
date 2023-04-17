@@ -233,7 +233,8 @@ void Engine::checkCudaErrorCode(cudaError_t code) {
     }
 }
 
-bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals) {
+bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inputs, std::vector<std::vector<std::vector<float>>>& featureVectors,
+                          const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize) {
     // First we do some error checking
     if (inputs.empty() || inputs[0].empty()) {
         std::cout << "===== Error =====" << std::endl;
@@ -308,9 +309,15 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         }
 
         cv::cuda::GpuMat mfloat;
-        gpu_dst.convertTo(mfloat, CV_32FC3, 1.f / 255.f);
+        if (normalize) {
+            // [0.f, 1.f]
+            gpu_dst.convertTo(mfloat, CV_32FC3, 1.f / 255.f);
+        } else {
+            // [0.f, 255.f]
+            gpu_dst.convertTo(mfloat, CV_32FC3);
+        }
 
-        // Subtract mean normalize
+        // Apply normalizations
         cv::cuda::subtract(mfloat, cv::Scalar(subVals[0], subVals[1], subVals[2]), mfloat, cv::noArray(), -1);
         cv::cuda::divide(mfloat, cv::Scalar(divVals[0], divVals[1], divVals[2]), mfloat, 1, -1);
 
