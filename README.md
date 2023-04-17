@@ -35,21 +35,22 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - How to specify a simple optimization profile
 - How to read / write data from / into GPU memory and work with GPU images.
 - How to use cuda stream to run async inference and later synchronize. 
-- How to work with models with static and dynamic batch sizes
-- **New:** Supports models with multiple outputs (and even works with batching!)
-- The code can be used as a base for many models, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV7](https://github.com/WongKinYiu/yolov7), [SCRFD](https://insightface.ai/scrfd) face detection, and many other single input - single / multiple output models. You will just need to implement the appropriate post-processing code.
+- How to work with models with static and dynamic batch sizes.
+- **New:** Supports models with multiple outputs (and even works with batching!).
+- **New:** Supports models with multiple inputs.
+- The code can be used as a base for many models, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV7](https://github.com/WongKinYiu/yolov7), [SCRFD](https://insightface.ai/scrfd) face detection, and many other single / multiple input - single / multiple output models. You will just need to implement the appropriate post-processing code.
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
 You will need to supply your own onnx model for this sample code, or you can download the sample model (see Sanity Check section below). Ensure to specify a dynamic batch size when exporting the onnx model if you would like to use batching. If not, you will need to set `Options.doesSupportDynamicBatchSize` to false.
 
 ### Prerequisites
-- Install OpenCV with cuda support. Instructions can be found [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7)
+- Install OpenCV with cuda support. Instructions can be found [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7).
 - `sudo apt install build-essential`
 - `sudo apt install python3-pip`
 - `pip3 install cmake`
-- Download TensorRT from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download)
-- Extract, and then navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation
+- Download TensorRT from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
+- Extract, and then navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation.
 
 ### Building the library
 - `mkdir build && cd build`
@@ -69,6 +70,10 @@ You will need to supply your own onnx model for this sample code, or you can dow
 - If you have having issues creating the TensorRT engine file from the onnx model, I would advise using the `trtexec` command line tool (comes packaged in the TensorRT download bundle in the `/bin` directory). It will provide you with more debug information.
 
 ### Changelog
+
+**V2.1**
+
+- Added support for models with multiple inputs. Implementation now supports models with single inputs, multiple inputs, single outputs, multiple outputs, and batching. 
 
 **V2.0**
 

@@ -8,7 +8,7 @@ int main() {
     // Specify our GPU inference configuration options
     Options options;
     // TODO: If your model only supports a static batch size
-    options.doesSupportDynamicBatchSize = false; 
+    options.doesSupportDynamicBatchSize = false;
     options.precision = Precision::FP16; // Use fp16 precision for faster inference.
 
     if (options.doesSupportDynamicBatchSize) {
