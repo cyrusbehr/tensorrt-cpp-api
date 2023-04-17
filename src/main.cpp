@@ -8,7 +8,7 @@ int main() {
     // Specify our GPU inference configuration options
     Options options;
     // TODO: If your model only supports a static batch size
-    options.doesSupportDynamicBatchSize = true; // TODO Cyrus: Change this to back to false so that the sample model will work. Add to readme stating that needs to be changed to true for other models.
+    options.doesSupportDynamicBatchSize = false; 
     options.precision = Precision::FP16; // Use fp16 precision for faster inference.
 
     if (options.doesSupportDynamicBatchSize) {
@@ -21,7 +21,7 @@ int main() {
     // TODO: Specify your model here.
     // Must specify a dynamic batch size when exporting the model from onnx.
     // If model only specifies a static batch size, must set the above variable doesSupportDynamicBatchSize to false.
-    const std::string onnxModelpath = "../models/spoof.onnx"; // TODO Cyrus: Change this back.
+    const std::string onnxModelpath = "../models/arcfaceresnet100-8.onnx";
 
     bool succ = engine.build(onnxModelpath);
     if (!succ) {
@@ -54,12 +54,15 @@ int main() {
     const auto& inputDims = engine.getInputDims();
     std::vector<std::vector<cv::cuda::GpuMat>> inputs;
 
+    // TODO:
+    // For the sake of the demo, we will be feeding the same image to all the inputs
+    // You should populate your inputs appropriately.
     for (const auto & inputDim : inputDims) {
         std::vector<cv::cuda::GpuMat> input;
         for (size_t j = 0; j < batchSize; ++j) {
             cv::cuda::GpuMat resized;
             // TODO:
-            // You can choose to resize by scaling, adding padding, or a conbination of the two in order to maintain the aspect ratio
+            // You can choose to resize by scaling, adding padding, or a combination of the two in order to maintain the aspect ratio
             // You can use the Engine::resizeKeepAspectRatioPadRightBottom to resize to a square while maintain the aspect ratio (adds padding where necessary to achieve this).
             // If you are running the sample code using the suggested model, then the input image already has the correct size.
             // The following resizes without maintaining aspect ratio so use carefully!
