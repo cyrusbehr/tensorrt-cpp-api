@@ -87,25 +87,27 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
-
-
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
     if (!config) {
         return false;
     }
 
-    const auto input = network->getInput(0);
-    const auto inputName = input->getName();
-    const auto inputDims = input->getDimensions();
-    int32_t inputC = inputDims.d[1];
-    int32_t inputH = inputDims.d[2];
-    int32_t inputW = inputDims.d[3];
-
-    // Specify the optimization profile
+    // Register a single optimization profile
     IOptimizationProfile *optProfile = builder->createOptimizationProfile();
-    optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-    optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
-    optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+    const int32_t numInputs = network->getNbInputs();
+    for (int32_t i = 0; i < numInputs; ++i) {
+        const auto input = network->getInput(i);
+        const auto inputName = input->getName();
+        const auto inputDims = input->getDimensions();
+        int32_t inputC = inputDims.d[1];
+        int32_t inputH = inputDims.d[2];
+        int32_t inputW = inputDims.d[3];
+
+        // Specify the optimization profile
+        optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+        optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
+        optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+    }
     config->addOptimizationProfile(optProfile);
 
     config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
@@ -175,47 +177,45 @@ bool Engine::loadNetwork() {
         return false;
     }
 
-    if (!m_engine->bindingIsInput(0)) {
-        throw std::runtime_error("Error, the model does not have an input!");
-    }
-    auto dims = m_engine->getBindingDimensions(0);
-    m_inputH = dims.d[2];
-    m_inputW = dims.d[3];
-
     m_context = std::unique_ptr<nvinfer1::IExecutionContext>(m_engine->createExecutionContext());
     if (!m_context) {
         return false;
     }
 
-    // Allocate the input and output buffers
+    // Storage for holding the input and output buffers
+    // This will be passed to TensorRT for inference
     m_buffers.resize(m_engine->getNbBindings());
 
     // Create a cuda stream
     cudaStream_t stream;
     checkCudaErrorCode(cudaStreamCreate(&stream));
 
-    // Allocate memory for the input
-    // Allocate enough to fit the max batch size (we could end up using less later)
-    checkCudaErrorCode(cudaMallocAsync(&m_buffers[0], m_options.maxBatchSize * dims.d[1] * dims.d[2] * dims.d[3] * sizeof(float), stream));
-
-    // Allocate buffers for the outputs
+    // Allocate GPU memory for input and output buffers
     m_outputLengthsFloat.clear();
-    for (int i = 1; i < m_engine->getNbBindings(); ++i) {
+    for (int i = 0; i < m_engine->getNbBindings(); ++i) {
         if (m_engine->bindingIsInput(i)) {
-            // This code implementation currently only supports models with a single input
-            throw std::runtime_error("Implementation currently only supports models with single input");
-        }
+            auto inputBindingDims = m_engine->getBindingDimensions(i);
 
-        uint32_t outputLenFloat = 1;
-        auto outputDims = m_engine->getBindingDimensions(i);
-        for (int j = 1; j < outputDims.nbDims; ++j) {
-            // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer
-            outputLenFloat *= outputDims.d[j];
-        }
+            // Allocate memory for the input
+            // Allocate enough to fit the max batch size (we could end up using less later)
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], m_options.maxBatchSize * inputBindingDims.d[1] * inputBindingDims.d[2] * inputBindingDims.d[3] * sizeof(float), stream));
 
-        m_outputLengthsFloat.push_back(outputLenFloat);
-        // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
-        checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * m_options.maxBatchSize * sizeof(float), stream));
+            // Store the input dims for later use
+            m_inputDims.emplace_back(inputBindingDims.d[1], inputBindingDims.d[2], inputBindingDims.d[3]);
+        } else {
+            // The binding is an output
+            uint32_t outputLenFloat = 1;
+            auto outputDims = m_engine->getBindingDimensions(i);
+
+            for (int j = 1; j < outputDims.nbDims; ++j) {
+                // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer
+                outputLenFloat *= outputDims.d[j];
+            }
+
+            m_outputLengthsFloat.push_back(outputLenFloat);
+            // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * m_options.maxBatchSize * sizeof(float), stream));
+        }
     }
 
     // Synchronize and destroy the cuda stream
@@ -233,16 +233,24 @@ void Engine::checkCudaErrorCode(cudaError_t code) {
     }
 }
 
-bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals) {
+bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals) {
     // First we do some error checking
-    if (inputs.empty()) {
+    if (inputs.empty() || inputs[0].empty()) {
         std::cout << "===== Error =====" << std::endl;
         std::cout << "Provided input vector is empty!" << std::endl;
         return false;
     }
 
+    const auto numInputs = m_inputDims.size();
+    if (inputs.size() != numInputs) {
+        std::cout << "===== Error =====" << std::endl;
+        std::cout << "Incorrect number of inputs provided!" << std::endl;
+        return false;
+    }
+
+    // Ensure the batch size param was set correctly
     if (!m_options.doesSupportDynamicBatchSize) {
-        if (inputs.size() > 1) {
+        if (inputs[0].size() > 1) {
             std::cout << "===== Error =====" << std::endl;
             std::cout << "Model does not support running batch inference!" << std::endl;
             std::cout << "Please only provide a single input" << std::endl;
@@ -250,54 +258,73 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
         }
     }
 
-    auto inputDimsOriginal = m_engine->getBindingDimensions(0);
-    auto batchSize = static_cast<int32_t>(inputs.size());
-
-    auto& input = inputs[0];
-    if (input.channels() != inputDimsOriginal.d[1] ||
-        input.rows != inputDimsOriginal.d[2] ||
-        input.cols != inputDimsOriginal.d[3]) {
-        std::cout << "===== Error =====" << std::endl;
-        std::cout << "Input does not have correct size!" << std::endl;
-        std::cout << "Execpted: (" << inputDimsOriginal.d[1] << ", " << inputDimsOriginal.d[2] << ", " << inputDimsOriginal.d[3] << ")"  << std::endl;
-        std::cout << "Got: (" << input.channels() << ", " << input.rows << ", " << input.cols << ")" << std::endl;
-        std::cout << "Ensure you resize your input image to the correct size" << std::endl;
-        return false;
+    const auto batchSize = static_cast<int32_t>(inputs[0].size());
+    // Make sure the same batch size was provided for all inputs
+    for (size_t i = 1; i < inputs.size(); ++i) {
+        if (inputs[i].size() != static_cast<size_t>(batchSize)) {
+            std::cout << "===== Error =====" << std::endl;
+            std::cout << "The batch size needs to be constant for all inputs!" << std::endl;
+            return false;
+        }
     }
-
-    nvinfer1::Dims4 inputDims = {batchSize, inputDimsOriginal.d[1], inputDimsOriginal.d[2], inputDimsOriginal.d[3]};
-    m_context->setBindingDimensions(0, inputDims); // Define the batch size
-
-    if (!m_context->allInputDimensionsSpecified()) {
-        throw std::runtime_error("Error, not all required dimensions specified.");
-    }
-
-    // Copy over the input data and perform the preprocessing
-    cv::cuda::GpuMat gpu_dst(1, inputs[0].rows * inputs[0].cols * inputs.size() , CV_8UC3);
-
-    size_t width = inputs[0].cols * inputs[0].rows;
-    for (size_t img=0; img< inputs.size(); img++) {
-        std::vector<cv::cuda::GpuMat> input_channels {
-                cv::cuda::GpuMat(inputs[0].rows, inputs[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img])),
-                cv::cuda::GpuMat(inputs[0].rows, inputs[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
-                cv::cuda::GpuMat(inputs[0].rows, inputs[0].cols, CV_8U, &(gpu_dst.ptr()[width * 2 + width * 3 * img]))
-        };
-        cv::cuda::split(inputs[img], input_channels);  // HWC -> CHW
-    }
-
-    cv::cuda::GpuMat mfloat;
-    gpu_dst.convertTo(mfloat, CV_32FC3, 1.f / 255.f);
-
-    // Subtract mean normalize
-    cv::cuda::subtract(mfloat, cv::Scalar(subVals[0], subVals[1], subVals[2]), mfloat, cv::noArray(), -1);
-    cv::cuda::divide(mfloat, cv::Scalar(divVals[0], divVals[1], divVals[2]), mfloat, 1, -1);
-
-    auto *dataPointer = mfloat.ptr<void>();
 
     // Create the cuda stream that will be used for inference
     cudaStream_t inferenceCudaStream;
     checkCudaErrorCode(cudaStreamCreate(&inferenceCudaStream));
-    checkCudaErrorCode(cudaMemcpyAsync(m_buffers[0], dataPointer, mfloat.cols * mfloat.rows * mfloat.channels() * sizeof(float), cudaMemcpyDeviceToDevice, inferenceCudaStream));
+
+    // Preprocess all the inputs
+    for (size_t i = 0; i < numInputs; ++i) {
+        const auto& batchInput = inputs[i];
+        const auto& dims = m_inputDims[i];
+
+        auto &input = batchInput[0];
+        if (input.channels() != dims.d[0] ||
+            input.rows != dims.d[1] ||
+            input.cols != dims.d[2]) {
+            std::cout << "===== Error =====" << std::endl;
+            std::cout << "Input does not have correct size!" << std::endl;
+            std::cout << "Execpted: (" << dims.d[1] << ", " << dims.d[2] << ", "
+                      << dims.d[3] << ")" << std::endl;
+            std::cout << "Got: (" << input.channels() << ", " << input.rows << ", " << input.cols << ")" << std::endl;
+            std::cout << "Ensure you resize your input image to the correct size" << std::endl;
+            return false;
+        }
+
+        nvinfer1::Dims4 inputDims = {batchSize, dims.d[0], dims.d[1], dims.d[2]};
+        m_context->setBindingDimensions(i, inputDims); // Define the batch size
+
+        // Copy over the input data and perform the preprocessing
+        cv::cuda::GpuMat gpu_dst(1, batchInput[0].rows * batchInput[0].cols * batchSize, CV_8UC3);
+
+        size_t width = batchInput[0].cols * batchInput[0].rows;
+        for (size_t img = 0; img < batchInput.size(); img++) {
+            std::vector<cv::cuda::GpuMat> input_channels{
+                    cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img])),
+                    cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
+                    cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U,
+                                     &(gpu_dst.ptr()[width * 2 + width * 3 * img]))
+            };
+            cv::cuda::split(batchInput[img], input_channels);  // HWC -> CHW
+        }
+
+        cv::cuda::GpuMat mfloat;
+        gpu_dst.convertTo(mfloat, CV_32FC3, 1.f / 255.f);
+
+        // Subtract mean normalize
+        cv::cuda::subtract(mfloat, cv::Scalar(subVals[0], subVals[1], subVals[2]), mfloat, cv::noArray(), -1);
+        cv::cuda::divide(mfloat, cv::Scalar(divVals[0], divVals[1], divVals[2]), mfloat, 1, -1);
+
+        auto *dataPointer = mfloat.ptr<void>();
+
+        checkCudaErrorCode(cudaMemcpyAsync(m_buffers[i], dataPointer,
+                                           mfloat.cols * mfloat.rows * mfloat.channels() * sizeof(float),
+                                           cudaMemcpyDeviceToDevice, inferenceCudaStream));
+    }
+
+    // Ensure all dynamic bindings have been defined.
+    if (!m_context->allInputDimensionsSpecified()) {
+        throw std::runtime_error("Error, not all required dimensions specified.");
+    }
 
     // Run inference.
     bool status = m_context->enqueueV2(m_buffers.data(), inferenceCudaStream, nullptr);
@@ -311,10 +338,10 @@ bool Engine::runInference(const std::vector<cv::cuda::GpuMat> &inputs, std::vect
     for (int batch = 0; batch < batchSize; ++batch) {
         // Batch
         std::vector<std::vector<float>> batchOutputs{};
-        for (int outputBinding = 1; outputBinding < m_engine->getNbBindings(); ++outputBinding) {
-            // First binding is the input which is why we start at index 1
+        for (int32_t outputBinding = numInputs; outputBinding < m_engine->getNbBindings(); ++outputBinding) {
+            // We start at index m_inputDims.size() to account for the inputs in our m_buffers
             std::vector<float> output;
-            auto outputLenFloat = m_outputLengthsFloat[outputBinding - 1];
+            auto outputLenFloat = m_outputLengthsFloat[outputBinding - numInputs];
             output.resize(outputLenFloat);
             // Copy the output
             checkCudaErrorCode(cudaMemcpyAsync(output.data(), static_cast<char*>(m_buffers[outputBinding]) + (batch * sizeof(float) * outputLenFloat), outputLenFloat * sizeof(float), cudaMemcpyDeviceToHost, inferenceCudaStream));
