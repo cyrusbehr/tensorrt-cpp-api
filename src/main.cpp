@@ -14,6 +14,9 @@ int main() {
     if (options.doesSupportDynamicBatchSize) {
         options.optBatchSize = 4;
         options.maxBatchSize = 16;
+    } else {
+        options.optBatchSize = 1;
+        options.maxBatchSize = 1;
     }
 
     Engine engine(options);
@@ -33,7 +36,7 @@ int main() {
         throw std::runtime_error("Unable to load TRT engine.");
     }
 
-    // Lets use a batch size which matches that which we set the Options.optBatchSize option
+    // Let's use a batch size which matches that which we set the Options.optBatchSize option
     size_t batchSize = options.optBatchSize;
 
     const std::string inputImage = "../inputs/face_chip.jpg";
@@ -48,7 +51,6 @@ int main() {
     // Upload to GPU memory
     cv::cuda::GpuMat img;
     img.upload(cpuImg);
-
 
     // Populate the input vectors
     const auto& inputDims = engine.getInputDims();
@@ -87,6 +89,7 @@ int main() {
 
     size_t numIterations = 100;
 
+    // Benchmark the inference time
     auto t1 = Clock::now();
     for (size_t i = 0; i < numIterations; ++i) {
         featureVectors.clear();

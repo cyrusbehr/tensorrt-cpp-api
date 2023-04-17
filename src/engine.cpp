@@ -183,7 +183,7 @@ bool Engine::loadNetwork() {
     }
 
     // Storage for holding the input and output buffers
-    // This will be passed to TensorRT
+    // This will be passed to TensorRT for inference
     m_buffers.resize(m_engine->getNbBindings());
 
     // Create a cuda stream
