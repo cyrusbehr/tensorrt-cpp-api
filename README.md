@@ -45,10 +45,10 @@ The following instructions assume you are using Ubuntu 20.04.
 You will need to supply your own onnx model for this sample code, or you can download the sample model (see Sanity Check section below). Ensure to specify a dynamic batch size when exporting the onnx model if you would like to use batching. If not, you will need to set `Options.doesSupportDynamicBatchSize` to false.
 
 ### Prerequisites
-- Install OpenCV with cuda support. Instructions can be found [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7).
 - `sudo apt install build-essential`
 - `sudo apt install python3-pip`
 - `pip3 install cmake`
+- Install OpenCV with cuda support. Instructions can be found [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7).
 - Download TensorRT from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
 - Extract, and then navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation.
 
