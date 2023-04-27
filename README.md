@@ -66,6 +66,9 @@ You will need to supply your own onnx model for this sample code, or you can dow
 -0.0548096 -0.0994873 0.176514 0.161377 0.226807 0.215942 -0.296143 -0.0601807 0.240112 -0.18457 ...
 ```
 
+### Understanding the code
+- The bulk of the implementation is in `src/engine.cpp`. I have written lots of comments all throughout the code which should make it easy to understand what is going on. 
+
 ### How to debug
 - If you have having issues creating the TensorRT engine file from the onnx model, I would advise using the `trtexec` command line tool (comes packaged in the TensorRT download bundle in the `/bin` directory). It will provide you with more debug information.
 
