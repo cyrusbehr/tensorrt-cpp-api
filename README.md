@@ -39,6 +39,7 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - **New:** Supports models with multiple outputs (and even works with batching!).
 - **New:** Supports models with multiple inputs.
 - The code can be used as a base for many models, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV7](https://github.com/WongKinYiu/yolov7), [SCRFD](https://insightface.ai/scrfd) face detection, and many other single / multiple input - single / multiple output models. You will just need to implement the appropriate post-processing code.
+- TODO: Add support for models with dynamic input shapes.
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
