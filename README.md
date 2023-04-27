@@ -30,7 +30,7 @@
 
 # TensorRT C++ Tutorial
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference. It covers how to do the following:
-- How to install TensorRT on Ubuntu 20.04
+- How to install TensorRT 8 on Ubuntu 20.04
 - How to generate a TRT engine file optimized for your GPU
 - How to specify a simple optimization profile
 - How to read / write data from / into GPU memory and work with GPU images.
@@ -49,7 +49,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
 - `sudo apt install python3-pip`
 - `pip3 install cmake`
 - Install OpenCV with cuda support. Instructions can be found [here](https://gist.github.com/raulqf/f42c718a658cddc16f9df07ecc627be7).
-- Download TensorRT from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
+- Download TensorRT 8 from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
 - Extract, and then navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation.
 
 ### Building the library
