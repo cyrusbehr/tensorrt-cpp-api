@@ -74,7 +74,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
 - If you have having issues creating the TensorRT engine file from the onnx model, I would advise using the `trtexec` command line tool (comes packaged in the TensorRT download bundle in the `/bin` directory). It will provide you with more debug information.
 
 ### Show your appreciation
-If this repository was helpful to you, I would appreicate if you could give it a star. That will encourage me to ensure it's up to date and solve issues quickly. 
+If this project was helpful to you, I would appreicate if you could give it a star. That will encourage me to ensure it's up to date and solve issues quickly. 
 
 ### Changelog
 
