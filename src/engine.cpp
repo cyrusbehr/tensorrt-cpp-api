@@ -297,6 +297,8 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         // Copy over the input data and perform the preprocessing
         cv::cuda::GpuMat gpu_dst(1, batchInput[0].rows * batchInput[0].cols * batchSize, CV_8UC3);
 
+        // OpenCV reads images into memory in NHWC format, while TensorRT expects images in NCHW format. 
+        // The following code converts NHWC to NCHW.
         size_t width = batchInput[0].cols * batchInput[0].rows;
         for (size_t img = 0; img < batchInput.size(); img++) {
             std::vector<cv::cuda::GpuMat> input_channels{
