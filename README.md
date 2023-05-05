@@ -23,7 +23,7 @@
     <br />
     <a href="https://www.youtube.com/watch?v=kPJ9uDduxOs">Project Overview Video</a>
     .
-    <a href="https://youtu.be/Z0n5aLmcRHQ">Code Walk-through Video</a>
+    <a href="https://youtu.be/Z0n5aLmcRHQ">Code Deep-Dive Video</a>
   </p>
 </p>
 
