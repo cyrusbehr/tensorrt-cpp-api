@@ -14,17 +14,16 @@
   <h3 align="center">TensorRT C++ API Tutorial</h3>
 
   <p align="center">
+    <b>
     How to use TensorRT C++ API for high performance GPU inference.
+    </b>
     <br />
-    A Venice Computer Vision Presentation
+    Supports models with single / multiple inputs and single / multiple outputs with batching.
     <br />
     <br />
-    <a href="https://www.youtube.com/watch?v=kPJ9uDduxOs">Video Presentation</a>
+    <a href="https://www.youtube.com/watch?v=kPJ9uDduxOs">Project Overview Video</a>
     .
-    <a href="https://docs.google.com/presentation/d/1vOw4fCzCbD-jJZCE3cjsOUq83UGlLA4g/edit?usp=share_link&ouid=110822293658782092853&rtpof=true&sd=true">Presentation Slides</a>
-    <!-- <a href="https://social.trueface.ai/34gcD2q">Blog Post</a> -->
-    ·
-    <a href="https://venicecomputervision.com/">Venice Computer Vision</a>
+    <a href="https://youtu.be/Z0n5aLmcRHQ">Code Walk-through Video</a>
   </p>
 </p>
 
@@ -38,6 +37,7 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - How to work with models with static and dynamic batch sizes.
 - **New:** Supports models with multiple outputs (and even works with batching!).
 - **New:** Supports models with multiple inputs.
+- **New:** New [video walkthrough](https://youtu.be/Z0n5aLmcRHQ) where I explain every line of code.
 - The code can be used as a base for many models, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV7](https://github.com/WongKinYiu/yolov7), [SCRFD](https://insightface.ai/scrfd) face detection, and many other single / multiple input - single / multiple output models. You will just need to implement the appropriate post-processing code.
 - TODO: Add support for models with dynamic input shapes.
 
