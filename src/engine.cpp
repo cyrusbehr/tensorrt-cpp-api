@@ -284,7 +284,7 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
             input.cols != dims.d[2]) {
             std::cout << "===== Error =====" << std::endl;
             std::cout << "Input does not have correct size!" << std::endl;
-            std::cout << "Execpted: (" << dims.d[1] << ", " << dims.d[2] << ", "
+            std::cout << "Expected: (" << dims.d[1] << ", " << dims.d[2] << ", "
                       << dims.d[3] << ")" << std::endl;
             std::cout << "Got: (" << input.channels() << ", " << input.rows << ", " << input.cols << ")" << std::endl;
             std::cout << "Ensure you resize your input image to the correct size" << std::endl;
