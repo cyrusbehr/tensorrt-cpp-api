@@ -68,7 +68,7 @@ int main() {
             // You can use the Engine::resizeKeepAspectRatioPadRightBottom to resize to a square while maintain the aspect ratio (adds padding where necessary to achieve this).
             // If you are running the sample code using the suggested model, then the input image already has the correct size.
             // The following resizes without maintaining aspect ratio so use carefully!
-            cv::cuda::resize(img, resized, cv::Size(inputDim.d[1], inputDim.d[2]));
+            cv::cuda::resize(img, resized, cv::Size(inputDim.d[2], inputDim.d[1])); // TRT dims are (height, width) whereas OpenCV is (width, height)
             input.emplace_back(std::move(resized));
         }
         inputs.emplace_back(std::move(input));
