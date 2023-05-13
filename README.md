@@ -60,7 +60,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
 
 ### Sanity check
 - To perform a sanity check, download the following [ArcFace model](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface) from [here](https://github.com/onnx/models/blob/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx) and place it in the `./models` directory.
-- Make sure `Options.doesSupportDynamicBatchSize` is set to `false` before passing it the `Options` to the `Engine` constructor on [this](https://github.com/cyrusbehr/tensorrt-cpp-api/blob/003b72ba032d40afee241adeb7ebe7ca1ea685ca/src/main.cpp#L12) line.
+- Make sure `Options.doesSupportDynamicBatchSize` is set to `false` before passing the `Options` to the `Engine` constructor on [this](https://github.com/cyrusbehr/tensorrt-cpp-api/blob/003b72ba032d40afee241adeb7ebe7ca1ea685ca/src/main.cpp#L12) line.
 - Uncomment the code for printing out the feature vector at the bottom of `./src/main.cpp`.
 - Running inference using said model and the image located in `inputs/face_chip.jpg` should produce the following feature vector:
 ```text
