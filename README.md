@@ -15,7 +15,7 @@
 
   <p align="center">
     <b>
-    How to use TensorRT C++ API for high performance GPU inference.
+    How to use TensorRT C++ API for high performance GPU machine-learning inference.
     </b>
     <br />
     Supports models with single / multiple inputs and single / multiple outputs with batching.
