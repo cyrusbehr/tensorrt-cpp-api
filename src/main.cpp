@@ -96,7 +96,7 @@ int main() {
     auto t1 = Clock::now();
     for (size_t i = 0; i < numIterations; ++i) {
         featureVectors.clear();
-        engine.runInference(inputs, featureVectors, subVals, divVals);
+        engine.runInference(inputs, featureVectors, subVals, divVals, normalize);
     }
     auto t2 = Clock::now();
     double totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
