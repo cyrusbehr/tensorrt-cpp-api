@@ -54,7 +54,7 @@ public:
     const std::vector<nvinfer1::Dims3>& getInputDims() const { return m_inputDims; };
 private:
     // Converts the engine options into a string
-    std::string serializeEngineOptions(const Options& options);
+    std::string serializeEngineOptions(const Options& options, const std::string& onnxModelPath);
 
     void getDeviceNames(std::vector<std::string>& deviceNames);
 

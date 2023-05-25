@@ -32,7 +32,7 @@ Engine::Engine(const Options &options)
 
 bool Engine::build(std::string onnxModelPath) {
     // Only regenerate the engine file if it has not already been generated for the specified options
-    m_engineName = serializeEngineOptions(m_options);
+    m_engineName = serializeEngineOptions(m_options, onnxModelPath);
     std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
 
     if (doesFileExist(m_engineName)) {
@@ -365,8 +365,9 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
     return true;
 }
 
-std::string Engine::serializeEngineOptions(const Options &options) {
-    std::string engineName = "trt.engine";
+std::string Engine::serializeEngineOptions(const Options &options, const std::string& onnxModelPath) {
+    const auto filenamePos = onnxModelPath.find_last_of('/') + 1;
+    std::string engineName = onnxModelPath.substr(filenamePos, onnxModelPath.find_last_of('.') - filenamePos) + ".engine";
 
     // Add the GPU device name to the file to ensure that the model is only used on devices with the exact same GPU
     std::vector<std::string> deviceNames;

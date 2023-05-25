@@ -79,6 +79,10 @@ If this project was helpful to you, I would appreicate if you could give it a st
 
 ### Changelog
 
+**v2.2**
+
+- Serialize model name as part of engine file. 
+
 **V2.1**
 
 - Added support for models with multiple inputs. Implementation now supports models with single inputs, multiple inputs, single outputs, multiple outputs, and batching. 
