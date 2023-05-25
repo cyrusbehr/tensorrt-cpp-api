@@ -23,7 +23,7 @@ bool Engine::doesFileExist(const std::string &filepath) {
 
 Engine::Engine(const Options &options)
     : m_options(options) {
-    if (!m_options.doesSupportDynamicBatchSize) {
+    if (!m_options.doesSupportDynamicBatchSize && (m_options.optBatchSize > 1 || m_options.maxBatchSize > 1)) {
         std::cout << "Model does not support dynamic batch size, using optBatchSize and maxBatchSize of 1" << std::endl;
         m_options.optBatchSize = 1;
         m_options.maxBatchSize = 1;
