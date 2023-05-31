@@ -45,7 +45,7 @@ bool Engine::build(std::string onnxModelPath) {
     }
 
     // Was not able to find the engine file, generate...
-    std::cout << "Engine not found, generating..." << std::endl;
+    std::cout << "Engine not found, generating. This could take a while..." << std::endl;
 
     // Create our engine builder.
     auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(m_logger));
