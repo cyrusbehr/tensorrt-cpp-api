@@ -409,13 +409,13 @@ void Engine::getDeviceNames(std::vector<std::string>& deviceNames) {
     }
 }
 
-cv::cuda::GpuMat Engine::resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat &input, size_t newDim, const cv::Scalar &bgcolor) {
-    float r = std::min(newDim / (input.cols * 1.0), newDim / (input.rows * 1.0));
+cv::cuda::GpuMat Engine::resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat &input, size_t height, size_t width, const cv::Scalar &bgcolor) {
+    float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
     int unpad_h = r * input.rows;
     cv::cuda::GpuMat re(unpad_h, unpad_w, CV_8UC3);
     cv::cuda::resize(input, re, re.size());
-    cv::cuda::GpuMat out(newDim, newDim, CV_8UC3, bgcolor);
+    cv::cuda::GpuMat out(height, width, CV_8UC3, bgcolor);
     re.copyTo(out(cv::Rect(0, 0, re.cols, re.rows)));
     return out;
 }

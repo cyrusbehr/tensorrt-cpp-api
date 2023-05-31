@@ -49,7 +49,7 @@ public:
                       const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}, bool normalize = true);
 
     // Utility method
-    static cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t newDim, const cv::Scalar& bgcolor = cv::Scalar(0, 0, 0));
+    static cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t height, size_t width, const cv::Scalar& bgcolor = cv::Scalar(0, 0, 0));
 
     const std::vector<nvinfer1::Dims3>& getInputDims() const { return m_inputDims; };
 private:
