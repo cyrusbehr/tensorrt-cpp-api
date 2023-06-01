@@ -206,6 +206,7 @@ bool Engine::loadNetwork() {
             // The binding is an output
             uint32_t outputLenFloat = 1;
             auto outputDims = m_engine->getBindingDimensions(i);
+            m_outputDims.push_back(outputDims);
 
             for (int j = 1; j < outputDims.nbDims; ++j) {
                 // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer

@@ -52,6 +52,7 @@ public:
     static cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t height, size_t width, const cv::Scalar& bgcolor = cv::Scalar(0, 0, 0));
 
     const std::vector<nvinfer1::Dims3>& getInputDims() const { return m_inputDims; };
+    const std::vector<nvinfer1::Dims>& getOutputDims() const { return m_outputDims ;};
 private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options, const std::string& onnxModelPath);
@@ -64,6 +65,7 @@ private:
     std::vector<void*> m_buffers;
     std::vector<uint32_t> m_outputLengthsFloat{};
     std::vector<nvinfer1::Dims3> m_inputDims;
+    std::vector<nvinfer1::Dims> m_outputDims;
 
     std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
