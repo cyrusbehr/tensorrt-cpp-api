@@ -46,6 +46,8 @@ The following instructions assume you are using Ubuntu 20.04.
 You will need to supply your own onnx model for this sample code, or you can download the sample model (see Sanity Check section below). Ensure to specify a dynamic batch size when exporting the onnx model if you would like to use batching. If not, you will need to set `Options.doesSupportDynamicBatchSize` to false.
 
 ### Prerequisites
+- Install CUDA, instructions [here](https://developer.nvidia.com/cuda-11.2.0-download-archive).
+- Install cudnn, instructions [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#download).
 - `sudo apt install build-essential`
 - `sudo apt install python3-pip`
 - `pip3 install cmake`
