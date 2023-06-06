@@ -157,8 +157,8 @@ bool Engine::loadNetwork() {
         throw std::runtime_error("Unable to read engine file");
     }
 
-    std::unique_ptr<IRuntime> runtime{createInferRuntime(m_logger)};
-    if (!runtime) {
+    m_runtime = std::unique_ptr<IRuntime> {createInferRuntime(m_logger)};
+    if (!m_runtime) {
         return false;
     }
 
@@ -172,7 +172,7 @@ bool Engine::loadNetwork() {
         throw std::runtime_error(errMsg);
     }
 
-    m_engine = std::unique_ptr<nvinfer1::ICudaEngine>(runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
+    m_engine = std::unique_ptr<nvinfer1::ICudaEngine>(m_runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
     if (!m_engine) {
         return false;
     }
