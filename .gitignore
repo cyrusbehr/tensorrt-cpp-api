@@ -32,7 +32,7 @@
 *.out
 *.app
 
-build*
+build*/
 cmake-build-*
 .idea/
 
