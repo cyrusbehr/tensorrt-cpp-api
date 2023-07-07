@@ -77,7 +77,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
 
 ### Sample Usage
 Wondering how to integrate this library into your project? Or perhaps how to read the outputs to extract meaningful information? 
-If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP), which demonstrates how to use the TensorRT C++ API to run YoloV8 inference. It makes use of this project in the backend!
+If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP), which demonstrates how to use the TensorRT C++ API to run YoloV8 inference (supports segmentation!). It makes use of this project in the backend!
 
 ### Understanding the code
 - The bulk of the implementation is in `src/engine.cpp`. I have written lots of comments all throughout the code which should make it easy to understand what is going on. 
