@@ -54,7 +54,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
 - `sudo apt install build-essential`
 - `sudo apt install python3-pip`
 - `pip3 install cmake`
-- Install OpenCV with cuda support. To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`
+- Install OpenCV with cuda support. To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`.
   - Recommended >= 4.8
 - Download TensorRT 8 from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
   - Recommended >= 8.6

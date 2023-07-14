@@ -34,8 +34,8 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
 -D BUILD_EXAMPLES=OFF \
 -D CUDA_ARCH_BIN=8.6 \
 -D WITH_FFMPEG=ON \
--D CUDNN_INCLUDE_DIR=/home/cyrus/work/libs/cudnn/include \
--D CUDNN_LIBRARY=/home/cyrus/work/libs/cudnn/lib64/libcudnn.so \
+-D CUDNN_INCLUDE_DIR=/usr/local/cuda/include \
+-D CUDNN_LIBRARY=/usr/local/cuda/lib64/libcudnn.so \
 ..
 
 make -j 8
