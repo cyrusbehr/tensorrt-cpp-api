@@ -103,7 +103,7 @@ bool Engine::build(std::string onnxModelPath) {
         int32_t inputH = inputDims.d[2];
         int32_t inputW = inputDims.d[3];
 
-        // Specify the optimization profile
+        // Specify the optimization profile`
         optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
         optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
         optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
@@ -113,7 +113,10 @@ bool Engine::build(std::string onnxModelPath) {
     config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
 
     if (m_options.precision == Precision::FP16) {
-        config->setFlag(BuilderFlag::kFP16);
+        // Ensure the GPU supports FP16 inference
+        if (builder->platformHasFastFp16()) {
+            config->setFlag(BuilderFlag::kFP16);
+        }
     }
 
     // CUDA stream used for profiling by the builder.

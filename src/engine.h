@@ -23,7 +23,7 @@ struct Options {
     int32_t maxBatchSize = 16;
     // Max allowable GPU memory to be used for model conversion, in bytes.
     // Applications should allow the engine builder as much workspace as they can afford;
-    // at runtime, the SDK allocates no more than this and typically less.
+    // at runtime, the engine allocates no more than this and typically less.
     size_t maxWorkspaceSize = 4000000000;
     // GPU device index
     int deviceIndex = 0;
