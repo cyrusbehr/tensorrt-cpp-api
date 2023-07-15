@@ -2,7 +2,25 @@
 #include <opencv2/opencv.hpp>
 #include <chrono>
 
-typedef std::chrono::high_resolution_clock Clock;
+// Utility Timer
+template <typename Clock = std::chrono::high_resolution_clock>
+class Stopwatch
+{
+    typename Clock::time_point start_point;
+public:
+    Stopwatch() :start_point(Clock::now()){}
+
+    // Returns elapsed time
+    template <typename Rep = typename Clock::duration::rep, typename Units = typename Clock::duration>
+    Rep elapsedTime() const {
+        std::atomic_thread_fence(std::memory_order_relaxed);
+        auto counted_time = std::chrono::duration_cast<Units>(Clock::now() - start_point).count();
+        std::atomic_thread_fence(std::memory_order_relaxed);
+        return static_cast<Rep>(counted_time);
+    }
+};
+
+using preciseStopwatch = Stopwatch<>;
 
 int main() {
     // Specify our GPU inference configuration options
@@ -93,15 +111,14 @@ int main() {
     size_t numIterations = 100;
 
     // Benchmark the inference time
-    auto t1 = Clock::now();
+    preciseStopwatch stopwatch;
     for (size_t i = 0; i < numIterations; ++i) {
         featureVectors.clear();
         engine.runInference(inputs, featureVectors, subVals, divVals, normalize);
     }
-    auto t2 = Clock::now();
-    double totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    auto totalElapsedTimeMs = stopwatch.elapsedTime<float, std::chrono::milliseconds>();
 
-    std::cout << "Success! Average time per inference: " << totalTime / numIterations / static_cast<float>(inputs[0].size()) <<
+    std::cout << "Success! Average time per inference: " << totalElapsedTimeMs / numIterations / static_cast<float>(inputs[0].size()) <<
     " ms, for batch size of: " << inputs[0].size() << std::endl;
 
     // Print the feature vectors

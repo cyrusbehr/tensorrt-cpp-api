@@ -193,6 +193,7 @@ bool Engine::loadNetwork() {
     cudaStream_t stream;
     checkCudaErrorCode(cudaStreamCreate(&stream));
 
+
     // Allocate GPU memory for input and output buffers
     m_outputLengthsFloat.clear();
     for (int i = 0; i < m_engine->getNbBindings(); ++i) {
