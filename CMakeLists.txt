@@ -29,5 +29,5 @@ add_library(tensorrt_cpp_api SHARED
 target_include_directories(tensorrt_cpp_api PUBLIC ${OpenCV_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ${TensorRT_INCLUDE_DIRS})
 target_link_libraries(tensorrt_cpp_api PUBLIC ${OpenCV_LIBS} ${CUDA_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${TensorRT_LIBRARIES})
 
-add_executable(driver src/main.cpp)
-target_link_libraries(driver tensorrt_cpp_api)
+add_executable(run_inference_benchmark src/main.cpp)
+target_link_libraries(run_inference_benchmark tensorrt_cpp_api)

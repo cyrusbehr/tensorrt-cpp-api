@@ -72,7 +72,6 @@ bool Engine::build(std::string onnxModelPath) {
 
     // We are going to first read the onnx file into memory, then pass that buffer to the parser.
     // Had our onnx model file been encrypted, this approach would allow us to first decrypt the buffer.
-
     std::ifstream file(onnxModelPath, std::ios::binary | std::ios::ate);
     std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
@@ -96,6 +95,7 @@ bool Engine::build(std::string onnxModelPath) {
     IOptimizationProfile *optProfile = builder->createOptimizationProfile();
     const int32_t numInputs = network->getNbInputs();
     for (int32_t i = 0; i < numInputs; ++i) {
+        // Must specify dimensions for all the inputs the model expects.
         const auto input = network->getInput(i);
         const auto inputName = input->getName();
         const auto inputDims = input->getDimensions();
@@ -125,6 +125,8 @@ bool Engine::build(std::string onnxModelPath) {
     config->setProfileStream(profileStream);
 
     // Build the engine
+    // If this call fails, it is suggested to increase the logger verbosity to kVERBOSE and try rebuilding the engine.
+    // Doing so will provide you with more information on why exactly it is failing.
     std::unique_ptr<IHostMemory> plan{builder->buildSerializedNetwork(*network, *config)};
     if (!plan) {
         return false;

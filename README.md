@@ -58,7 +58,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
   - Recommended >= 4.8
 - Download TensorRT 8 from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
   - Recommended >= 8.6
-  - Required >= 8.0
+  - Required >= 8.5.1 
 - Extract, and then navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation.
 
 ### Building the library
@@ -66,11 +66,15 @@ You will need to supply your own onnx model for this sample code, or you can dow
 - `cmake ..`
 - `make -j$(nproc)`
 
+### Running the executable
+- From the build directory, run `./run_inference_benchmark`
+
 ### Sanity check
 - To perform a sanity check, download the following [ArcFace model](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface) from [here](https://github.com/onnx/models/blob/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx) and place it in the `./models` directory.
 - Make sure `Options.doesSupportDynamicBatchSize` is set to `false` before passing the `Options` to the `Engine` constructor on [this](https://github.com/cyrusbehr/tensorrt-cpp-api/blob/003b72ba032d40afee241adeb7ebe7ca1ea685ca/src/main.cpp#L12) line.
 - Uncomment the code for printing out the feature vector at the bottom of `./src/main.cpp`.
 - Running inference using said model and the image located in `inputs/face_chip.jpg` should produce the following feature vector:
+  - Note: The feature vector will not be identical (but very similar) as [TensorRT is not deterministic](https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#determinism). 
 ```text
 -0.0548096 -0.0994873 0.176514 0.161377 0.226807 0.215942 -0.296143 -0.0601807 0.240112 -0.18457 ...
 ```
@@ -90,6 +94,12 @@ If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyr
 If this project was helpful to you, I would appreciate if you could give it a star. That will encourage me to ensure it's up to date and solve issues quickly. 
 
 ### Changelog
+
+**V3.0**
+
+- Requires TensorRT 8.5.1 or newer
+- Implementation has been updated to use `IExecutionContext::enqueueV3()` instead of now deprecated `IExecutionContext::enqueueV2()`.
+- Executable has renamed from `driver` to `run_inference_benchmark`. 
 
 **v2.2**
 
