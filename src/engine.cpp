@@ -475,14 +475,18 @@ void Engine::transformOutput(std::vector<std::vector<std::vector<float>>>& input
 Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW, int32_t inputH,
                                                const std::string &calibDataDirPath,
                                                const std::string &calibTableName,
-                                               const std::string &inputBlobName, bool readCache)
+                                               const std::string &inputBlobName,
+                                               float divVal,
+                                               const std::array<float, 3>& subVals,
+                                               bool readCache)
         : m_batchSize(batchSize)
         , m_inputW(inputW)
         , m_inputH(inputH)
         , m_imgIdx(0)
-        , m_imgDir(calibDataDirPath)
         , m_calibTableName(calibTableName)
         , m_inputBlobName(inputBlobName)
+        , m_divVal(divVal)
+        , m_subVals(subVals)
         , m_readCache(readCache) {
 
     // Allocate GPU memory to hold the entire batch
@@ -503,17 +507,48 @@ Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW
     auto rd = std::random_device {};
     auto rng = std::default_random_engine { rd() };
     std::shuffle(std::begin(m_imgPaths), std::end(m_imgPaths), rng);
-
-    // Resize the calibration images so that it is a multiple of the batch size.
-    m_imgPaths.resize(static_cast<int>(m_imgPaths.size() / m_batchSize) * m_batchSize);
 }
 
 int32_t Int8EntropyCalibrator2::getBatchSize() const noexcept {
+    // Return the batch size
     return m_batchSize;
 }
 
 bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32_t nbBindings) noexcept {
-    return false;
+    // This method will read a batch of images into GPU memory, and place the pointer to the GPU memory in the bindings variable.
+
+    if (m_imgIdx + m_batchSize > static_cast<int>(m_imgPaths.size())) {
+        // There are not enough images left to satisfy an entire batch
+        return false;
+    }
+
+    // Read the calibration images into memory for the current batch
+    std::vector<cv::Mat> inputImgs;
+    for (int i = m_imgIdx; i < m_imgIdx + m_batchSize; i++) {
+        std::cout << "Reading image " << i << ":" << m_imgPaths[i] << std::endl;
+        auto tmp = cv::imread(m_imgPaths[i]);
+        if (tmp.empty()){
+            std::cout << "Fatal error: Unable to read image at path: " << m_imgPaths[i] << std::endl;
+            return false;
+        }
+
+        // TODO: Define any preprocessing code here, such as resizing
+        // In this example, we will assume the calibration images are already of the correct size
+
+        inputImgs.emplace_back(std::move(tmp));
+    }
+
+    m_imgIdx+= m_batchSize;
+    // Convert NHWC to NCHW, swap BGR to RGB
+    // Also apply any scaling and normalization
+    float multVal = 1.f / (255.f * m_divVal);
+    cv::Mat blob = cv::dnn::blobFromImages(inputImgs, multVal, cv::Size(m_inputW, m_inputH), cv::Scalar(m_subVals[0], m_subVals[1], m_subVals[2]), true, false);
+    // Upload the NCHW buffer to GPU memory
+    checkCudaErrorCode(cudaMemcpyAsync(m_deviceInput, blob.ptr<float>(0), m_inputCount * sizeof(float), cudaMemcpyHostToDevice));
+
+    names[0] = m_inputBlobName.c_str();
+    bindings[0] = m_deviceInput;
+    return true;
 }
 
 void const *Int8EntropyCalibrator2::readCalibrationCache(size_t &length) noexcept {

@@ -7,7 +7,7 @@
 #include <opencv2/cudaarithm.hpp>
 #include "NvInfer.h"
 
-// Utility methods that shouldn't belong to engine class
+// Utility methods
 namespace Util {
     inline bool doesFileExist(const std::string& filepath) {
         std::ifstream f(filepath.c_str());
@@ -44,11 +44,16 @@ struct Options {
 };
 
 // Class used for int8 calibration
-// Need to implement abstract class methods.
 class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
 public:
-    Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW, int32_t inputH, const std::string& calibDataDirPath, const std::string& calibTableName, const std::string& inputBlobName, bool readCache = true);
+    // The default constructor params will normalize input values between [0.f, 1.f]
+    // If the model requires values to be normalized between [-1.f, 1.f], use the following params:
+    //    divVal = 0.5f;
+    //    subVals = {0.5f, 0.5f, 0.5f};
+    Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW, int32_t inputH, const std::string& calibDataDirPath, const std::string& calibTableName, const std::string& inputBlobName,
+                           float divVal = 1.f, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f}, bool readCache = true);
     virtual ~Int8EntropyCalibrator2();
+    // Abstract base class methods which must be implemented
     int32_t getBatchSize () const noexcept override;
     bool getBatch (void *bindings[], char const *names[], int32_t nbBindings) noexcept override;
     void const * readCalibrationCache (std::size_t &length) noexcept override;
@@ -58,11 +63,12 @@ private:
     const int32_t m_inputW;
     const int32_t m_inputH;
     int32_t m_imgIdx;
-    const std::string m_imgDir;
     std::vector<std::string> m_imgPaths;
     size_t m_inputCount;
     const std::string m_calibTableName;
     const std::string m_inputBlobName;
+    const float m_divVal;
+    const std::array<float, 3> m_subVals;
     const bool m_readCache;
     void* m_deviceInput;
     std::vector<char> m_calibCache;
@@ -84,6 +90,14 @@ public:
     // Run inference.
     // Input format [input][batch][cv::cuda::GpuMat]
     // Output format [batch][output][feature_vector]
+    // The default runInference method will normalize values between [0.f, 1.f]
+    // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).
+    // If the model requires values to be normalized between [-1.f, 1.f], use the following params:
+    //    subVals = {0.5f, 0.5f, 0.5f};
+    //    divVals = {0.5f, 0.5f, 0.5f};
+    //    normalize = true;
+    std::array<float, 3> subVals {0.5f, 0.5f, 0.5f};
+    std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
     bool runInference(const std::vector<std::vector<cv::cuda::GpuMat>>& inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},
                       const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}, bool normalize = true);
 
@@ -92,8 +106,8 @@ public:
     // This is done so that it's easier to convert detected coordinates (ex. YOLO model) back to the original reference frame.
     static cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t height, size_t width, const cv::Scalar& bgcolor = cv::Scalar(0, 0, 0));
 
-    const std::vector<nvinfer1::Dims3>& getInputDims() const { return m_inputDims; };
-    const std::vector<nvinfer1::Dims>& getOutputDims() const { return m_outputDims ;};
+    [[nodiscard]] const std::vector<nvinfer1::Dims3>& getInputDims() const { return m_inputDims; };
+    [[nodiscard]] const std::vector<nvinfer1::Dims>& getOutputDims() const { return m_outputDims ;};
 
     // Utility method for transforming triple nested output array into 2D array
     // Should be used when the output batch size is 1, but there are multiple output feature vectors
