@@ -208,38 +208,41 @@ bool Engine::loadNetwork() {
 
     // Storage for holding the input and output buffers
     // This will be passed to TensorRT for inference
-    m_buffers.resize(m_engine->getNbBindings());
+    m_buffers.resize(m_engine->getNbIOTensors());
 
     // Create a cuda stream
     cudaStream_t stream;
     checkCudaErrorCode(cudaStreamCreate(&stream));
 
-
     // Allocate GPU memory for input and output buffers
     m_outputLengthsFloat.clear();
-    for (int i = 0; i < m_engine->getNbBindings(); ++i) {
-        if (m_engine->bindingIsInput(i)) {
-            auto inputBindingDims = m_engine->getBindingDimensions(i);
+    for (int i = 0; i < m_engine->getNbIOTensors(); ++i) {
+        const auto tensorName = m_engine->getIOTensorName(i);
+        m_IOTensorNames.emplace_back(tensorName);
+        const auto tensorType = m_engine->getTensorIOMode(tensorName);
+        const auto tensorShape = m_engine->getTensorShape(tensorName);
+        if (tensorType == TensorIOMode::kINPUT) {
             // Allocate memory for the input
             // Allocate enough to fit the max batch size (we could end up using less later)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], m_options.maxBatchSize * inputBindingDims.d[1] * inputBindingDims.d[2] * inputBindingDims.d[3] * sizeof(float), stream));
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], m_options.maxBatchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * sizeof(float), stream));
 
             // Store the input dims for later use
-            m_inputDims.emplace_back(inputBindingDims.d[1], inputBindingDims.d[2], inputBindingDims.d[3]);
-        } else {
+            m_inputDims.emplace_back(tensorShape.d[1], tensorShape.d[2], tensorShape.d[3]);
+        } else if (tensorType == TensorIOMode::kOUTPUT) {
             // The binding is an output
             uint32_t outputLenFloat = 1;
-            auto outputDims = m_engine->getBindingDimensions(i);
-            m_outputDims.push_back(outputDims);
+            m_outputDims.push_back(tensorShape);
 
-            for (int j = 1; j < outputDims.nbDims; ++j) {
+            for (int j = 1; j < tensorShape.nbDims; ++j) {
                 // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer
-                outputLenFloat *= outputDims.d[j];
+                outputLenFloat *= tensorShape.d[j];
             }
 
             m_outputLengthsFloat.push_back(outputLenFloat);
             // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
             checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * m_options.maxBatchSize * sizeof(float), stream));
+        } else {
+            throw std::runtime_error("Error, IO Tensor is neither an input or output!");
         }
     }
 
@@ -316,13 +319,15 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         }
 
         nvinfer1::Dims4 inputDims = {batchSize, dims.d[0], dims.d[1], dims.d[2]};
-        m_context->setBindingDimensions(i, inputDims); // Define the batch size
+        m_context->setInputShape(m_IOTensorNames[i].c_str(), inputDims); // Define the batch size
 
         // Copy over the input data and perform the preprocessing
         cv::cuda::GpuMat gpu_dst(1, batchInput[0].rows * batchInput[0].cols * batchSize, CV_8UC3);
 
         // OpenCV reads images into memory in NHWC format, while TensorRT expects images in NCHW format. 
         // The following code converts NHWC to NCHW.
+        // Even though TensorRT expects NCHW at IO, during optimization, it can internally use NHWC to optimize cuda kernels
+        // See: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#data-layout
         size_t width = batchInput[0].cols * batchInput[0].rows;
         for (size_t img = 0; img < batchInput.size(); img++) {
             std::vector<cv::cuda::GpuMat> input_channels{
@@ -359,8 +364,16 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         throw std::runtime_error("Error, not all required dimensions specified.");
     }
 
+    // Set the address of the input and output buffers
+    for (size_t i = 0; i < m_buffers.size(); ++i) {
+        bool status = m_context->setTensorAddress(m_IOTensorNames[i].c_str(), m_buffers[i]);
+        if (!status) {
+            return false;
+        }
+    }
+
     // Run inference.
-    bool status = m_context->enqueueV2(m_buffers.data(), inferenceCudaStream, nullptr);
+    bool status = m_context->enqueueV3(inferenceCudaStream);
     if (!status) {
         return false;
     }

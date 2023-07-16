@@ -63,6 +63,7 @@ private:
     std::vector<uint32_t> m_outputLengthsFloat{};
     std::vector<nvinfer1::Dims3> m_inputDims;
     std::vector<nvinfer1::Dims> m_outputDims;
+    std::vector<std::string> m_IOTensorNames;
 
     // Must keep IRuntime around for inference, see: https://forums.developer.nvidia.com/t/is-it-safe-to-deallocate-nvinfer1-iruntime-after-creating-an-nvinfer1-icudaengine-but-before-running-inference-with-said-icudaengine/255381/2?u=cyruspk4w6
     std::unique_ptr<nvinfer1::IRuntime> m_runtime = nullptr;
@@ -73,5 +74,5 @@ private:
     Logger m_logger;
     std::string m_engineName;
 
-    inline void checkCudaErrorCode(cudaError_t code);
+    static inline void checkCudaErrorCode(cudaError_t code);
 };
