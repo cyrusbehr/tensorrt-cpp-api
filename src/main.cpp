@@ -1,5 +1,6 @@
 #include "engine.h"
 #include <opencv2/opencv.hpp>
+#include <opencv2/cudaimgproc.hpp>
 #include <chrono>
 
 // Utility Timer
@@ -22,29 +23,41 @@ public:
 
 using preciseStopwatch = Stopwatch<>;
 
-int main() {
+int main(int argc, char *argv[]) {
+    // Parse the command line arguments
+    // Must pass the model path as a command line argument to the executable
+    if (argc < 2) {
+        std::cout << "Error: Must specify the model path" << std::endl;
+        std::cout << "Usage: " << argv[0] << " /path/to/onnx/model.onnx" << std::endl;
+        return -1;
+    }
+
+    if (argc > 3) {
+        std::cout << "Error: Too many arguments provided" << std::endl;
+        std::cout << "Usage: " << argv[0] << " /path/to/onnx/model.onnx" << std::endl;
+    }
+
+    // Ensure the onnx model exists
+    const std::string onnxModelPath = argv[1];
+    if (!Engine::doesFileExist(onnxModelPath)) {
+        std::cout << "Error: Unable to find file at path: " << onnxModelPath << std::endl;
+        return -1;
+    }
+
     // Specify our GPU inference configuration options
     Options options;
-    // TODO: If your model only supports a static batch size
-    options.doesSupportDynamicBatchSize = false;
-    options.precision = Precision::FP16; // Use fp16 precision for faster inference.
-
-    if (options.doesSupportDynamicBatchSize) {
-        options.optBatchSize = 4;
-        options.maxBatchSize = 16;
-    } else {
-        options.optBatchSize = 1;
-        options.maxBatchSize = 1;
-    }
+    // Specify what precision to use for inference
+    // FP16 is approximately twice as fast as FP32.
+    options.precision = Precision::FP16;
+    // If the model does not support dynamic batch size, then the below two parameters must be set to 1.
+    // Specify the batch size to optimize for.
+    options.optBatchSize = 1;
+    // Specify the maximum batch size we plan on running.
+    options.maxBatchSize = 1;
 
     Engine engine(options);
 
-    // TODO: Specify your model here.
-    // Must specify a dynamic batch size when exporting the model from onnx.
-    // If model only specifies a static batch size, must set the above variable doesSupportDynamicBatchSize to false.
-    const std::string onnxModelpath = "../models/arcfaceresnet100-8.onnx";
-
-    bool succ = engine.build(onnxModelpath);
+    bool succ = engine.build(onnxModelPath);
     if (!succ) {
         throw std::runtime_error("Unable to build TRT engine.");
     }
@@ -54,32 +67,35 @@ int main() {
         throw std::runtime_error("Unable to load TRT engine.");
     }
 
-    // Let's use a batch size which matches that which we set the Options.optBatchSize option
-    size_t batchSize = options.optBatchSize;
-
+    // Read our input image
+    // TODO: You will need to read the input image required for your model
     const std::string inputImage = "../inputs/face_chip.jpg";
     auto cpuImg = cv::imread(inputImage);
     if (cpuImg.empty()) {
         throw std::runtime_error("Unable to read image at path: " + inputImage);
     }
 
-    // The model expects RGB input
-    cv::cvtColor(cpuImg, cpuImg, cv::COLOR_BGR2RGB);
-
     // Upload to GPU memory
     cv::cuda::GpuMat img;
     img.upload(cpuImg);
+
+    // The model expects RGB input
+    cv::cuda::cvtColor(img, img, cv::COLOR_BGR2RGB);
 
     // Populate the input vectors
     const auto& inputDims = engine.getInputDims();
     std::vector<std::vector<cv::cuda::GpuMat>> inputs;
 
+    // Let's use a batch size which matches that which we set the Options.optBatchSize option
+    size_t batchSize = options.optBatchSize;
+
+
     // TODO:
     // For the sake of the demo, we will be feeding the same image to all the inputs
     // You should populate your inputs appropriately.
-    for (const auto & inputDim : inputDims) {
+    for (const auto & inputDim : inputDims) { // For each of the model inputs...
         std::vector<cv::cuda::GpuMat> input;
-        for (size_t j = 0; j < batchSize; ++j) {
+        for (size_t j = 0; j < batchSize; ++j) { // For each element we want to add to the batch...
             cv::cuda::GpuMat resized;
             // TODO:
             // You can choose to resize by scaling, adding padding, or a combination of the two in order to maintain the aspect ratio
@@ -101,15 +117,18 @@ int main() {
     std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
     bool normalize = true;
 
-    // Discard the first inference time as it takes longer
+    // Warm up the network before we begin the benchmark
+    std::cout << "\nWarming up the network..." << std::endl;
     std::vector<std::vector<std::vector<float>>> featureVectors;
-    succ = engine.runInference(inputs, featureVectors, subVals, divVals, normalize);
-    if (!succ) {
-        throw std::runtime_error("Unable to run inference.");
+    for (int i = 0; i < 10; ++i) {
+        succ = engine.runInference(inputs, featureVectors, subVals, divVals, normalize);
+        if (!succ) {
+            throw std::runtime_error("Unable to run inference.");
+        }
     }
 
-    size_t numIterations = 100;
-
+    size_t numIterations = 250;
+    std::cout << "Warmup done. Running benchmarks (" << numIterations << " iterations)...\n" << std::endl;
     // Benchmark the inference time
     preciseStopwatch stopwatch;
     for (size_t i = 0; i < numIterations; ++i) {
@@ -117,9 +136,17 @@ int main() {
         engine.runInference(inputs, featureVectors, subVals, divVals, normalize);
     }
     auto totalElapsedTimeMs = stopwatch.elapsedTime<float, std::chrono::milliseconds>();
+    auto avgElapsedTimeMs = totalElapsedTimeMs / numIterations / static_cast<float>(inputs[0].size());
 
-    std::cout << "Success! Average time per inference: " << totalElapsedTimeMs / numIterations / static_cast<float>(inputs[0].size()) <<
-    " ms, for batch size of: " << inputs[0].size() << std::endl;
+    std::cout << "Benchmarking complete!" << std::endl;
+    std::cout << "======================" << std::endl;
+    std::cout << "Avg time per sample: " << std::endl;
+    std::cout << avgElapsedTimeMs << " ms" << std::endl;
+    std::cout << "Batch size: " << std::endl;
+    std::cout << inputs[0].size() << std::endl;
+    std::cout << "Avg FPS: " << std::endl;
+    std::cout << static_cast<int>(1000 / avgElapsedTimeMs) << " fps" << std::endl;
+    std::cout << "======================\n" << std::endl;
 
     // Print the feature vectors
     for (size_t batch = 0; batch < featureVectors.size(); ++batch) {

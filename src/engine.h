@@ -14,17 +14,12 @@ enum class Precision {
 
 // Options for the network
 struct Options {
-    bool doesSupportDynamicBatchSize = true;
     // Precision to use for GPU inference. 16 bit is faster but may reduce accuracy.
     Precision precision = Precision::FP16;
     // The batch size which should be optimized for.
     int32_t optBatchSize = 1;
     // Maximum allowable batch size
     int32_t maxBatchSize = 16;
-    // Max allowable GPU memory to be used for model conversion, in bytes.
-    // Applications should allow the engine builder as much workspace as they can afford;
-    // at runtime, the engine allocates no more than this and typically less.
-    size_t maxWorkspaceSize = 4000000000;
     // GPU device index
     int deviceIndex = 0;
 };
@@ -55,13 +50,13 @@ public:
 
     const std::vector<nvinfer1::Dims3>& getInputDims() const { return m_inputDims; };
     const std::vector<nvinfer1::Dims>& getOutputDims() const { return m_outputDims ;};
+
+    static bool doesFileExist(const std::string& filepath);
 private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options, const std::string& onnxModelPath);
 
     void getDeviceNames(std::vector<std::string>& deviceNames);
-
-    bool doesFileExist(const std::string& filepath);
 
     // Holds pointers to the input and output GPU buffers
     std::vector<void*> m_buffers;

@@ -27,6 +27,8 @@
   </p>
 </p>
 
+# TODO Cyrus: Remove doesSupportDynamicBatch option here
+
 # TensorRT C++ Tutorial
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference. It covers how to do the following:
 - How to install TensorRT 8 on Ubuntu 20.04
@@ -68,6 +70,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
 
 ### Running the executable
 - From the build directory, run `./run_inference_benchmark`
+- TODO Cyrus: Explain how to pass command line arguments 
 
 ### Sanity check
 - To perform a sanity check, download the following [ArcFace model](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface) from [here](https://github.com/onnx/models/blob/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx) and place it in the `./models` directory.

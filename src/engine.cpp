@@ -22,13 +22,7 @@ bool Engine::doesFileExist(const std::string &filepath) {
 }
 
 Engine::Engine(const Options &options)
-    : m_options(options) {
-    if (!m_options.doesSupportDynamicBatchSize && (m_options.optBatchSize > 1 || m_options.maxBatchSize > 1)) {
-        std::cout << "Model does not support dynamic batch size, using optBatchSize and maxBatchSize of 1" << std::endl;
-        m_options.optBatchSize = 1;
-        m_options.maxBatchSize = 1;
-    }
-}
+    : m_options(options) {}
 
 bool Engine::build(std::string onnxModelPath) {
     // Only regenerate the engine file if it has not already been generated for the specified options
@@ -52,9 +46,6 @@ bool Engine::build(std::string onnxModelPath) {
     if (!builder) {
         return false;
     }
-
-    // Set the max supported batch size
-    builder->setMaxBatchSize(m_options.maxBatchSize);
 
     // Define an explicit batch size and then create the network.
     // More info here: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#explicit-implicit-batch
@@ -86,6 +77,32 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
+    // Require that all the inputs have the same batch size
+    const auto numInputs = network->getNbInputs();
+    if (numInputs < 1) {
+        throw std::runtime_error("Error, model needs at least 1 input!");
+    }
+    const auto input0Batch = network->getInput(0)->getDimensions().d[0];
+    for (int32_t i = 1; i < numInputs; ++i) {
+        if (network->getInput(i)->getDimensions().d[0] != input0Batch) {
+            throw std::runtime_error("Error, the model has multiple inputs, each with differing batch sizes!");
+        }
+    }
+
+    // Check to see if the model supports dynamic batch size or not
+    if (input0Batch == -1) {
+        std::cout << "Model supports dynamic batch size" << std::endl;
+    } else if (input0Batch == 1) {
+        std::cout << "Model only supports fixed batch size of 1" << std::endl;
+        // If the model supports a fixed batch size, ensure that the maxBatchSize and optBatchSize were set correctly.
+        if (m_options.optBatchSize != input0Batch || m_options.maxBatchSize != input0Batch) {
+            throw std::runtime_error("Error, model only supports a fixed batch size of 1. Must set Options.optBatchSize and Options.maxBatchSize to 1");
+        }
+    } else {
+        throw std::runtime_error("Implementation currently only supports dynamic batch sizes or a fixed batch size of 1 (your batch size is fixed to "
+        + std::to_string(input0Batch) + ")");
+    }
+
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
     if (!config) {
         return false;
@@ -93,7 +110,6 @@ bool Engine::build(std::string onnxModelPath) {
 
     // Register a single optimization profile
     IOptimizationProfile *optProfile = builder->createOptimizationProfile();
-    const int32_t numInputs = network->getNbInputs();
     for (int32_t i = 0; i < numInputs; ++i) {
         // Must specify dimensions for all the inputs the model expects.
         const auto input = network->getInput(i);
@@ -109,8 +125,6 @@ bool Engine::build(std::string onnxModelPath) {
         optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
     }
     config->addOptimizationProfile(optProfile);
-
-    config->setMaxWorkspaceSize(m_options.maxWorkspaceSize);
 
     if (m_options.precision == Precision::FP16) {
         // Ensure the GPU supports FP16 inference
@@ -201,7 +215,6 @@ bool Engine::loadNetwork() {
     for (int i = 0; i < m_engine->getNbBindings(); ++i) {
         if (m_engine->bindingIsInput(i)) {
             auto inputBindingDims = m_engine->getBindingDimensions(i);
-
             // Allocate memory for the input
             // Allocate enough to fit the max batch size (we could end up using less later)
             checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], m_options.maxBatchSize * inputBindingDims.d[1] * inputBindingDims.d[2] * inputBindingDims.d[3] * sizeof(float), stream));
@@ -256,14 +269,13 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         return false;
     }
 
-    // Ensure the batch size param was set correctly
-    if (!m_options.doesSupportDynamicBatchSize) {
-        if (inputs[0].size() > 1) {
-            std::cout << "===== Error =====" << std::endl;
-            std::cout << "Model does not support running batch inference!" << std::endl;
-            std::cout << "Please only provide a single input" << std::endl;
-            return false;
-        }
+    // Ensure the batch size does not exceed the max
+    if (inputs[0].size() > m_options.maxBatchSize) {
+        std::cout << "===== Error =====" << std::endl;
+        std::cout << "The batch size is larger than the model expects!" << std::endl;
+        std::cout << "Model max batch size: " << m_options.maxBatchSize << std::endl;
+        std::cout << "Batch size provided to call to runInference: " << inputs[0].size() << std::endl;
+        return false;
     }
 
     const auto batchSize = static_cast<int32_t>(inputs[0].size());
@@ -399,7 +411,6 @@ std::string Engine::serializeEngineOptions(const Options &options, const std::st
 
     engineName += "." + std::to_string(options.maxBatchSize);
     engineName += "." + std::to_string(options.optBatchSize);
-    engineName += "." + std::to_string(options.maxWorkspaceSize);
 
     return engineName;
 }
