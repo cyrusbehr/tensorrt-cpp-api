@@ -57,17 +57,19 @@ int main(int argc, char *argv[]) {
 
     Engine engine(options);
 
+    // Build the onnx model into a TensorRT engine file.
     bool succ = engine.build(onnxModelPath);
     if (!succ) {
         throw std::runtime_error("Unable to build TRT engine.");
     }
 
+    // Load the TensorRT engine file from disk
     succ = engine.loadNetwork();
     if (!succ) {
         throw std::runtime_error("Unable to load TRT engine.");
     }
 
-    // Read our input image
+    // Read the input image
     // TODO: You will need to read the input image required for your model
     const std::string inputImage = "../inputs/face_chip.jpg";
     auto cpuImg = cv::imread(inputImage);
@@ -75,14 +77,14 @@ int main(int argc, char *argv[]) {
         throw std::runtime_error("Unable to read image at path: " + inputImage);
     }
 
-    // Upload to GPU memory
+    // Upload the image GPU memory
     cv::cuda::GpuMat img;
     img.upload(cpuImg);
 
     // The model expects RGB input
     cv::cuda::cvtColor(img, img, cv::COLOR_BGR2RGB);
 
-    // Populate the input vectors
+    // In the following section we populate the input vectors to later pass for inference
     const auto& inputDims = engine.getInputDims();
     std::vector<std::vector<cv::cuda::GpuMat>> inputs;
 
@@ -127,9 +129,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Benchmark the inference time
     size_t numIterations = 250;
     std::cout << "Warmup done. Running benchmarks (" << numIterations << " iterations)...\n" << std::endl;
-    // Benchmark the inference time
     preciseStopwatch stopwatch;
     for (size_t i = 0; i < numIterations; ++i) {
         featureVectors.clear();

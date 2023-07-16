@@ -29,13 +29,13 @@
 
 # TensorRT C++ Tutorial
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference on image data. It covers how to do the following:
-- How to install TensorRT 8 on Ubuntu 20.04
-- How to generate a TRT engine file optimized for your GPU
-- How to specify a simple optimization profile
+- How to install TensorRT 8 on Ubuntu 20.04.
+- How to generate a TRT engine file optimized for your GPU.
+- How to specify a simple optimization profile.
 - How to read / write data from / into GPU memory and work with GPU images.
 - How to use cuda stream to run async inference and later synchronize. 
 - How to work with models with static and dynamic batch sizes.
-- **New:** Supports models with multiple output tensors (and even works with batching!).
+- **New:** Supports models with multiple output tensors (and even works with batching).
 - **New:** Supports models with multiple inputs.
 - **New:** New [video walkthrough](https://youtu.be/Z0n5aLmcRHQ) where I explain every line of code.
 - The code can be used as a base for many models, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV7](https://github.com/WongKinYiu/yolov7), [SCRFD](https://insightface.ai/scrfd) face detection, and many other single / multiple input - single / multiple output models. You will just need to implement the appropriate post-processing code.
@@ -74,8 +74,8 @@ You will need to supply your own onnx model for this sample code, or you can dow
   - Note: See sanity check section below for instructions on how to obtain the arcface model.  
 
 ### Sanity Check
-- To perform a sanity check, download the following [ArcFace model](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface) from [here](https://github.com/onnx/models/blob/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx) and place it in the `./models` directory.
-- Running inference using said model and the image located in `inputs/face_chip.jpg` should produce the following feature vector:
+- To perform a sanity check, download the following [ArcFace model](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface) from [here](https://github.com/onnx/models/blob/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx) and place it in the `./models/` directory.
+- Running inference using said model and the image located in `./inputs/face_chip.jpg` should produce the following feature vector:
   - Note: The feature vector will not be identical (but very similar) as [TensorRT is not deterministic](https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#determinism). 
 ```text
 -0.0548096 -0.0994873 0.176514 0.161377 0.226807 0.215942 -0.296143 -0.0601807 0.240112 -0.18457 ...
@@ -83,7 +83,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
 
 ### Sample Integration
 Wondering how to integrate this library into your project? Or perhaps how to read the outputs to extract meaningful information? 
-If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP), which demonstrates how to use the TensorRT C++ API to run YoloV8 inference (supports segmentation!). It makes use of this project in the backend!
+If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP), which demonstrates how to use the TensorRT C++ API to run YoloV8 inference (supports segmentation). It makes use of this project in the backend!
 
 ### Understanding the Code
 - The bulk of the implementation is in `src/engine.cpp`. I have written lots of comments all throughout the code which should make it easy to understand what is going on. 
@@ -93,7 +93,7 @@ If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyr
 - If you have issues creating the TensorRT engine file from the onnx model, navigate to `src/engine.cpp` and change the log level by changing the severity level to `kVERBOSE` and rebuild and rerun. This should give you more information on where exactly the build process is failing.
 
 ### Show your Appreciation
-If this project was helpful to you, I would appreciate if you could give it a star. That will encourage me to ensure it's up to date and solve issues quickly. 
+If this project was helpful to you, I would appreciate if you could give it a star. That will encourage me to ensure it's up to date and solve issues quickly. I also do consulting work if you require more specific help. Connect with me on [LinkedIn](https://www.linkedin.com/in/cyrus-behroozi/). 
 
 ### Changelog
 

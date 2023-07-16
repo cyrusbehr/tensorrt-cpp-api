@@ -38,7 +38,7 @@ public:
     // Load and prepare the network for inference
     bool loadNetwork();
     // Run inference.
-    // Input format [input][batch][image]
+    // Input format [input][batch][cv::cuda::GpuMat]
     // Output format [batch][output][feature_vector]
     bool runInference(const std::vector<std::vector<cv::cuda::GpuMat>>& inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},
                       const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}, bool normalize = true);
