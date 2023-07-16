@@ -47,7 +47,7 @@ bool Engine::build(std::string onnxModelPath) {
         return false;
     }
 
-    // Define an explicit batch size and then create the network.
+    // Define an explicit batch size and then create the network (implicit batch size is deprecated).
     // More info here: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#explicit-implicit-batch
     auto explicitBatch = 1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
     auto network = std::unique_ptr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(explicitBatch));
@@ -72,12 +72,13 @@ bool Engine::build(std::string onnxModelPath) {
         throw std::runtime_error("Unable to read engine file");
     }
 
+    // Parse the buffer we read into memory.
     auto parsed = parser->parse(buffer.data(), buffer.size());
     if (!parsed) {
         return false;
     }
 
-    // Require that all the inputs have the same batch size
+    // Ensure that all the inputs have the same batch size
     const auto numInputs = network->getNbInputs();
     if (numInputs < 1) {
         throw std::runtime_error("Error, model needs at least 1 input!");
@@ -126,6 +127,7 @@ bool Engine::build(std::string onnxModelPath) {
     }
     config->addOptimizationProfile(optProfile);
 
+    // If the user specified FP16 precision, set that here.
     if (m_options.precision == Precision::FP16) {
         // Ensure the GPU supports FP16 inference
         if (builder->platformHasFastFp16()) {
@@ -176,6 +178,7 @@ bool Engine::loadNetwork() {
         throw std::runtime_error("Unable to read engine file");
     }
 
+    // Create a runtime to deserialize the engine file.
     m_runtime = std::unique_ptr<IRuntime> {createInferRuntime(m_logger)};
     if (!m_runtime) {
         return false;
@@ -191,11 +194,13 @@ bool Engine::loadNetwork() {
         throw std::runtime_error(errMsg);
     }
 
+    // Create an engine, a representation of the optimized model.
     m_engine = std::unique_ptr<nvinfer1::ICudaEngine>(m_runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
     if (!m_engine) {
         return false;
     }
 
+    // The execution context contains all of the state associated with a particular invocation
     m_context = std::unique_ptr<nvinfer1::IExecutionContext>(m_engine->createExecutionContext());
     if (!m_context) {
         return false;

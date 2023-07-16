@@ -19,6 +19,7 @@
     </b>
     <br />
     Supports models with single / multiple inputs and single / multiple outputs with batching.
+    "I read all the NVIDIA TensorRT docs so that you don't have to!"
     <br />
     <br />
     <a href="https://www.youtube.com/watch?v=kPJ9uDduxOs">Project Overview Video</a>
@@ -102,6 +103,7 @@ If this project was helpful to you, I would appreciate if you could give it a st
 - Implementation has been updated to use TensorRT 8.6 API. 
 - Implementation has been updated to use `IExecutionContext::enqueueV3()` instead of now deprecated `IExecutionContext::enqueueV2()`.
 - Executable has renamed from `driver` to `run_inference_benchmark` and now must be passed path to onnx model as command line argument. 
+- TODO Cyrus: Update this. 
 
 **v2.2**
 
