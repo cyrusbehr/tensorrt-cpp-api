@@ -52,9 +52,7 @@ You will need to supply your own onnx model for this sample code, or you can dow
 - Install cudnn, instructions [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#download).
   - Recommended >= 8
 - `sudo apt install build-essential`
-- `sudo apt install python3-pip`
-- `pip3 install cmake`
-  - `sudo apt-get install cmake` does not install a new-enough version of CMake which is why we use pip to install it. You can also install using snap. 
+- `sudo snap install cmake --classic`
 - Install OpenCV with cuda support. To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`.
   - If you use the provided script and you have installed cuDNN to a non-standard location, you must modify the `CUDNN_INCLUDE_DIR` and `CUDNN_LIBRARY` variables in the script.  
   - Recommended >= 4.8
