@@ -278,7 +278,7 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
     }
 
     // Ensure the batch size does not exceed the max
-    if (inputs[0].size() > m_options.maxBatchSize) {
+    if (inputs[0].size() > static_cast<size_t>(m_options.maxBatchSize)) {
         std::cout << "===== Error =====" << std::endl;
         std::cout << "The batch size is larger than the model expects!" << std::endl;
         std::cout << "Model max batch size: " << m_options.maxBatchSize << std::endl;
