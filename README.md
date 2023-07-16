@@ -28,7 +28,7 @@
 </p>
 
 # TensorRT C++ Tutorial
-**I read all the NVIDIA TensorRT docs so that you don't have to!**
+*I read all the NVIDIA TensorRT docs so that you don't have to!*
 
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference on image data. It covers how to do the following:
 - How to install TensorRT 8 on Ubuntu 20.04.
