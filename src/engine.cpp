@@ -455,3 +455,19 @@ cv::cuda::GpuMat Engine::resizeKeepAspectRatioPadRightBottom(const cv::cuda::Gpu
     re.copyTo(out(cv::Rect(0, 0, re.cols, re.rows)));
     return out;
 }
+
+void Engine::transformOutput(std::vector<std::vector<std::vector<float>>>& input, std::vector<std::vector<float>>& output) {
+    if (input.size() != 1) {
+        throw std::logic_error("The feature vector has incorrect dimensions!");
+    }
+
+    output = std::move(input[0]);
+}
+
+void Engine::transformOutput(std::vector<std::vector<std::vector<float>>>& input, std::vector<float>& output) {
+    if (input.size() != 1 || input[0].size() != 1) {
+        throw std::logic_error("The feature vector has incorrect dimensions!");
+    }
+
+    output = std::move(input[0][0]);
+}

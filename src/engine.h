@@ -52,6 +52,14 @@ public:
     const std::vector<nvinfer1::Dims>& getOutputDims() const { return m_outputDims ;};
 
     static bool doesFileExist(const std::string& filepath);
+
+    // Utility method for transforming triple nested output array into 2D array
+    // Should be used when the output batch size is 1, but there are multiple output feature vectors
+    static void transformOutput(std::vector<std::vector<std::vector<float>>>& input, std::vector<std::vector<float>>& output);
+
+    // Utility method for transforming triple nested output array into single array
+    // Should be used when the output batch size is 1, and there is only a single output feature vector
+    static void transformOutput(std::vector<std::vector<std::vector<float>>>& input, std::vector<float>& output);
 private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options, const std::string& onnxModelPath);
