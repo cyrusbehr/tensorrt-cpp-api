@@ -19,7 +19,6 @@
     </b>
     <br />
     Supports models with single / multiple inputs and single / multiple outputs with batching.
-    "I read all the NVIDIA TensorRT docs so that you don't have to!"
     <br />
     <br />
     <a href="https://www.youtube.com/watch?v=kPJ9uDduxOs">Project Overview Video</a>
@@ -29,6 +28,8 @@
 </p>
 
 # TensorRT C++ Tutorial
+**I read all the NVIDIA TensorRT docs so that you don't have to!**
+
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference on image data. It covers how to do the following:
 - How to install TensorRT 8 on Ubuntu 20.04.
 - How to generate a TRT engine file optimized for your GPU.
