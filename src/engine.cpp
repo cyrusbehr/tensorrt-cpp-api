@@ -1,10 +1,23 @@
-#include <iostream>
+#include <algorithm>
 #include <fstream>
+#include <filesystem>
+#include <iostream>
+#include <random>
+#include <iterator>
 
 #include "engine.h"
 #include "NvOnnxParser.h"
 
 using namespace nvinfer1;
+using namespace Util;
+
+std::vector<std::string> Util::getFilesInDirectory(const std::string& dirPath) {
+    std::vector<std::string> filepaths;
+    for (const auto& entry: std::filesystem::directory_iterator(dirPath)) {
+        filepaths.emplace_back(entry.path());
+    }
+    return filepaths;
+}
 
 void Logger::log(Severity severity, const char *msg) noexcept {
     // Would advise using a proper logging utility such as https://github.com/gabime/spdlog
@@ -14,11 +27,6 @@ void Logger::log(Severity severity, const char *msg) noexcept {
     if (severity <= Severity::kWARNING) {
         std::cout << msg << std::endl;
     }
-}
-
-bool Engine::doesFileExist(const std::string &filepath) {
-    std::ifstream f(filepath.c_str());
-    return f.good();
 }
 
 Engine::Engine(const Options &options)
@@ -253,14 +261,6 @@ bool Engine::loadNetwork() {
     return true;
 }
 
-void Engine::checkCudaErrorCode(cudaError_t code) {
-    if (code != 0) {
-        std::string errMsg = "CUDA operation failed with code: " + std::to_string(code) + "(" + cudaGetErrorName(code) + "), with message: " + cudaGetErrorString(code);
-        std::cout << errMsg << std::endl;
-        throw std::runtime_error(errMsg);
-    }
-}
-
 bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inputs, std::vector<std::vector<std::vector<float>>>& featureVectors,
                           const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize) {
     // First we do some error checking
@@ -471,3 +471,70 @@ void Engine::transformOutput(std::vector<std::vector<std::vector<float>>>& input
 
     output = std::move(input[0][0]);
 }
+
+Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW, int32_t inputH,
+                                               const std::string &calibDataDirPath,
+                                               const std::string &calibTableName,
+                                               const std::string &inputBlobName, bool readCache)
+        : m_batchSize(batchSize)
+        , m_inputW(inputW)
+        , m_inputH(inputH)
+        , m_imgIdx(0)
+        , m_imgDir(calibDataDirPath)
+        , m_calibTableName(calibTableName)
+        , m_inputBlobName(inputBlobName)
+        , m_readCache(readCache) {
+
+    // Allocate GPU memory to hold the entire batch
+    m_inputCount = 3 * inputW * inputH * batchSize;
+    checkCudaErrorCode(cudaMalloc(&m_deviceInput, m_inputCount * sizeof(float)));
+
+    // Read the name of all the files in the specified directory.
+    if (!doesFileExist(calibDataDirPath)) {
+        throw std::runtime_error("Error, directory at provided path does not exist: " + calibDataDirPath);
+    }
+
+    m_imgPaths = getFilesInDirectory(calibDataDirPath);
+    if (m_imgPaths.size() < static_cast<size_t>(batchSize)) {
+        throw std::runtime_error("There are fewer calibration images than the specified batch size!");
+    }
+
+    // Randomize the calibration data
+    auto rd = std::random_device {};
+    auto rng = std::default_random_engine { rd() };
+    std::shuffle(std::begin(m_imgPaths), std::end(m_imgPaths), rng);
+
+    // Resize the calibration images so that it is a multiple of the batch size.
+    m_imgPaths.resize(static_cast<int>(m_imgPaths.size() / m_batchSize) * m_batchSize);
+}
+
+int32_t Int8EntropyCalibrator2::getBatchSize() const noexcept {
+    return m_batchSize;
+}
+
+bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32_t nbBindings) noexcept {
+    return false;
+}
+
+void const *Int8EntropyCalibrator2::readCalibrationCache(size_t &length) noexcept {
+    std::cout << "Reading calibration cache: " << m_calibTableName << std::endl;
+    m_calibCache.clear();
+    std::ifstream input(m_calibTableName, std::ios::binary);
+    input >> std::noskipws;
+    if (m_readCache && input.good()) {
+        std::copy(std::istream_iterator<char>(input), std::istream_iterator<char>(), std::back_inserter(m_calibCache));
+    }
+    length = m_calibCache.size();
+    return length ? m_calibCache.data() : nullptr;
+}
+
+void Int8EntropyCalibrator2::writeCalibrationCache(const void *ptr, std::size_t length) noexcept {
+    std::cout << "Writing calib cache: " << m_calibTableName << " Size: " << length << " bytes" << std::endl;
+    std::ofstream output(m_calibTableName, std::ios::binary);
+    output.write(reinterpret_cast<const char*>(ptr), length);
+}
+
+Int8EntropyCalibrator2::~Int8EntropyCalibrator2() {
+    checkCudaErrorCode(cudaFree(m_deviceInput));
+};
+

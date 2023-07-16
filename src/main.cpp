@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
 
     // Ensure the onnx model exists
     const std::string onnxModelPath = argv[1];
-    if (!Engine::doesFileExist(onnxModelPath)) {
+    if (!Util::doesFileExist(onnxModelPath)) {
         std::cout << "Error: Unable to find file at path: " << onnxModelPath << std::endl;
         return -1;
     }

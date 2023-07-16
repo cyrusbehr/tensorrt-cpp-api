@@ -1,10 +1,29 @@
 #pragma once
 
+#include <fstream>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include "NvInfer.h"
+
+// Utility methods that shouldn't belong to engine class
+namespace Util {
+    inline bool doesFileExist(const std::string& filepath) {
+        std::ifstream f(filepath.c_str());
+        return f.good();
+    }
+
+    inline void checkCudaErrorCode(cudaError_t code) {
+        if (code != 0) {
+            std::string errMsg = "CUDA operation failed with code: " + std::to_string(code) + "(" + cudaGetErrorName(code) + "), with message: " + cudaGetErrorString(code);
+            std::cout << errMsg << std::endl;
+            throw std::runtime_error(errMsg);
+        }
+    }
+
+    std::vector<std::string> getFilesInDirectory(const std::string& dirPath);
+}
 
 // Precision used for GPU inference
 enum class Precision {
@@ -22,6 +41,31 @@ struct Options {
     int32_t maxBatchSize = 16;
     // GPU device index
     int deviceIndex = 0;
+};
+
+// Class used for int8 calibration
+// Need to implement abstract class methods.
+class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
+public:
+    Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW, int32_t inputH, const std::string& calibDataDirPath, const std::string& calibTableName, const std::string& inputBlobName, bool readCache = true);
+    virtual ~Int8EntropyCalibrator2();
+    int32_t getBatchSize () const noexcept override;
+    bool getBatch (void *bindings[], char const *names[], int32_t nbBindings) noexcept override;
+    void const * readCalibrationCache (std::size_t &length) noexcept override;
+    void writeCalibrationCache (void const *ptr, std::size_t length) noexcept override;
+private:
+    const int32_t m_batchSize;
+    const int32_t m_inputW;
+    const int32_t m_inputH;
+    int32_t m_imgIdx;
+    const std::string m_imgDir;
+    std::vector<std::string> m_imgPaths;
+    size_t m_inputCount;
+    const std::string m_calibTableName;
+    const std::string m_inputBlobName;
+    const bool m_readCache;
+    void* m_deviceInput;
+    std::vector<char> m_calibCache;
 };
 
 // Class to extend TensorRT logger
@@ -51,8 +95,6 @@ public:
     const std::vector<nvinfer1::Dims3>& getInputDims() const { return m_inputDims; };
     const std::vector<nvinfer1::Dims>& getOutputDims() const { return m_outputDims ;};
 
-    static bool doesFileExist(const std::string& filepath);
-
     // Utility method for transforming triple nested output array into 2D array
     // Should be used when the output batch size is 1, but there are multiple output feature vectors
     static void transformOutput(std::vector<std::vector<std::vector<float>>>& input, std::vector<std::vector<float>>& output);
@@ -81,6 +123,4 @@ private:
     Options m_options;
     Logger m_logger;
     std::string m_engineName;
-
-    static inline void checkCudaErrorCode(cudaError_t code);
 };

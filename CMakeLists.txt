@@ -31,3 +31,6 @@ target_link_libraries(tensorrt_cpp_api PUBLIC ${OpenCV_LIBS} ${CUDA_LIBRARIES} $
 
 add_executable(run_inference_benchmark src/main.cpp)
 target_link_libraries(run_inference_benchmark tensorrt_cpp_api)
+
+add_executable(int8example src/int8example.cpp)
+target_link_libraries(int8example tensorrt_cpp_api)
