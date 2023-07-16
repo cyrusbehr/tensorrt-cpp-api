@@ -101,10 +101,10 @@ If this project was helpful to you, I would appreciate if you could give it a st
 
 **V3.0**
 
-- Implementation has been updated to use TensorRT 8.6 API. 
-- Implementation has been updated to use `IExecutionContext::enqueueV3()` instead of now deprecated `IExecutionContext::enqueueV2()`.
+- Implementation has been updated to use TensorRT 8.6 API (ex. `IExecutionContext::enqueueV3()`). 
 - Executable has renamed from `driver` to `run_inference_benchmark` and now must be passed path to onnx model as command line argument. 
-- TODO Cyrus: Update this. 
+- Removed `Options.doesSupportDynamicBatchSize`. Implementation now auto-detects supported batch sizes.
+- Removed `Options.maxWorkspaceSize`. Implementation now does not limit GPU memory during model constructions, allowing implementation to use as much of memory pool as is available for intermediate layers.
 
 **v2.2**
 
