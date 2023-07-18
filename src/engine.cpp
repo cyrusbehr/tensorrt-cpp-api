@@ -162,6 +162,8 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
             throw std::runtime_error("Error: If INT8 precision is selected, must provide path to calibration data directory to Engine::build method");
         }
 
+        config->setFlag((BuilderFlag::kINT8));
+
         const auto input = network->getInput(0);
         const auto inputName = input->getName();
         const auto inputDims = input->getDimensions();
