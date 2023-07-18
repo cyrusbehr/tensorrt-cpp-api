@@ -130,9 +130,10 @@ bool Engine::build(std::string onnxModelPath) {
     // If the user specified FP16 precision, set that here.
     if (m_options.precision == Precision::FP16) {
         // Ensure the GPU supports FP16 inference
-        if (builder->platformHasFastFp16()) {
-            config->setFlag(BuilderFlag::kFP16);
+        if (!builder->platformHasFastFp16()) {
+            throw std::runtime_error("Error: GPU does not support FP16 precision");
         }
+        config->setFlag(BuilderFlag::kFP16);
     }
 
     // CUDA stream used for profiling by the builder.
