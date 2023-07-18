@@ -564,7 +564,7 @@ bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32
     // Read the calibration images into memory for the current batch
     std::vector<cv::cuda::GpuMat> inputImgs;
     for (int i = m_imgIdx; i < m_imgIdx + m_batchSize; i++) {
-        std::cout << "Reading image " << i << ":" << m_imgPaths[i] << std::endl;
+        std::cout << "Reading image " << i << ": " << m_imgPaths[i] << std::endl;
         auto cpuImg = cv::imread(m_imgPaths[i]);
         if (cpuImg.empty()){
             std::cout << "Fatal error: Unable to read image at path: " << m_imgPaths[i] << std::endl;
