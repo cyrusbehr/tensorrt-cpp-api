@@ -600,11 +600,12 @@ bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32
 }
 
 void const *Int8EntropyCalibrator2::readCalibrationCache(size_t &length) noexcept {
-    std::cout << "Reading calibration cache: " << m_calibTableName << std::endl;
+    std::cout << "Searching for calibration cache: " << m_calibTableName << std::endl;
     m_calibCache.clear();
     std::ifstream input(m_calibTableName, std::ios::binary);
     input >> std::noskipws;
     if (m_readCache && input.good()) {
+        std::cout << "Reading calibration cache: " << m_calibTableName << std::endl;
         std::copy(std::istream_iterator<char>(input), std::istream_iterator<char>(), std::back_inserter(m_calibCache));
     }
     length = m_calibCache.size();
