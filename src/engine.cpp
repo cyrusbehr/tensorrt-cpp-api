@@ -4,7 +4,7 @@
 #include <iostream>
 #include <random>
 #include <iterator>
-
+#include <opencv2/cudaimgproc.hpp>
 #include "engine.h"
 #include "NvOnnxParser.h"
 
@@ -32,7 +32,12 @@ void Logger::log(Severity severity, const char *msg) noexcept {
 Engine::Engine(const Options &options)
     : m_options(options) {}
 
-bool Engine::build(std::string onnxModelPath) {
+bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals,
+                   bool normalize, const std::string& calibDataDirPath) {
+    m_subVals = subVals;
+    m_divVals = divVals;
+    m_normalize = normalize;
+
     // Only regenerate the engine file if it has not already been generated for the specified options
     m_engineName = serializeEngineOptions(m_options, onnxModelPath);
     std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
@@ -142,6 +147,29 @@ bool Engine::build(std::string onnxModelPath) {
             throw std::runtime_error("Error: GPU does not support FP16 precision");
         }
         config->setFlag(BuilderFlag::kFP16);
+    } else if (m_options.precision == Precision::INT8) {
+        if (numInputs > 1) {
+            throw std::runtime_error("Error, this implementation currently only supports INT8 quantization for single input models");
+        }
+
+        // Ensure the GPU supports INT8 Quantization
+        if (!builder->platformHasFastInt8()) {
+            throw std::runtime_error("Error: GPU does not support INT8 precision");
+        }
+
+        // Ensure the user has provided path to calibration data directory
+        if (calibDataDirPath.empty()) {
+            throw std::runtime_error("Error: If INT8 precision is selected, must provide path to calibration data directory to Engine::build method");
+        }
+
+        const auto input = network->getInput(0);
+        const auto inputName = input->getName();
+        const auto inputDims = input->getDimensions();
+        const auto calibrationFileName = m_engineName + ".calibration";
+
+        // TODO Cyrus: Not sure what the optimal batch size is for this
+        m_calibrator = std::make_unique<Int8EntropyCalibrator2>(64, inputDims.d[3], inputDims.d[2], calibDataDirPath, calibrationFileName, inputName, subVals, divVals, normalize);
+        config->setInt8Calibrator(m_calibrator.get());
     }
 
     // CUDA stream used for profiling by the builder.
@@ -262,8 +290,7 @@ bool Engine::loadNetwork() {
     return true;
 }
 
-bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inputs, std::vector<std::vector<std::vector<float>>>& featureVectors,
-                          const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize) {
+bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inputs, std::vector<std::vector<std::vector<float>>>& featureVectors) {
     // First we do some error checking
     if (inputs.empty() || inputs[0].empty()) {
         std::cout << "===== Error =====" << std::endl;
@@ -322,37 +349,12 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         nvinfer1::Dims4 inputDims = {batchSize, dims.d[0], dims.d[1], dims.d[2]};
         m_context->setInputShape(m_IOTensorNames[i].c_str(), inputDims); // Define the batch size
 
-        // Copy over the input data and perform the preprocessing
-        cv::cuda::GpuMat gpu_dst(1, batchInput[0].rows * batchInput[0].cols * batchSize, CV_8UC3);
-
         // OpenCV reads images into memory in NHWC format, while TensorRT expects images in NCHW format. 
-        // The following code converts NHWC to NCHW.
+        // The following method converts NHWC to NCHW.
         // Even though TensorRT expects NCHW at IO, during optimization, it can internally use NHWC to optimize cuda kernels
         // See: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#data-layout
-        size_t width = batchInput[0].cols * batchInput[0].rows;
-        for (size_t img = 0; img < batchInput.size(); img++) {
-            std::vector<cv::cuda::GpuMat> input_channels{
-                    cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img])),
-                    cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
-                    cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U,
-                                     &(gpu_dst.ptr()[width * 2 + width * 3 * img]))
-            };
-            cv::cuda::split(batchInput[img], input_channels);  // HWC -> CHW
-        }
-
-        cv::cuda::GpuMat mfloat;
-        if (normalize) {
-            // [0.f, 1.f]
-            gpu_dst.convertTo(mfloat, CV_32FC3, 1.f / 255.f);
-        } else {
-            // [0.f, 255.f]
-            gpu_dst.convertTo(mfloat, CV_32FC3);
-        }
-
-        // Apply normalizations
-        cv::cuda::subtract(mfloat, cv::Scalar(subVals[0], subVals[1], subVals[2]), mfloat, cv::noArray(), -1);
-        cv::cuda::divide(mfloat, cv::Scalar(divVals[0], divVals[1], divVals[2]), mfloat, 1, -1);
-
+        // Copy over the input data and perform the preprocessing
+        auto mfloat = blobFromGpuMats(batchInput, m_subVals, m_divVals, m_normalize);
         auto *dataPointer = mfloat.ptr<void>();
 
         checkCudaErrorCode(cudaMemcpyAsync(m_buffers[i], dataPointer,
@@ -403,6 +405,36 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
     return true;
 }
 
+cv::cuda::GpuMat Engine::blobFromGpuMats(const std::vector<cv::cuda::GpuMat>& batchInput, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize) {
+    cv::cuda::GpuMat gpu_dst(1, batchInput[0].rows * batchInput[0].cols * batchInput.size(), CV_8UC3);
+
+    size_t width = batchInput[0].cols * batchInput[0].rows;
+    for (size_t img = 0; img < batchInput.size(); img++) {
+        std::vector<cv::cuda::GpuMat> input_channels{
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img])),
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U,
+                                 &(gpu_dst.ptr()[width * 2 + width * 3 * img]))
+        };
+        cv::cuda::split(batchInput[img], input_channels);  // HWC -> CHW
+    }
+
+    cv::cuda::GpuMat mfloat;
+    if (normalize) {
+        // [0.f, 1.f]
+        gpu_dst.convertTo(mfloat, CV_32FC3, 1.f / 255.f);
+    } else {
+        // [0.f, 255.f]
+        gpu_dst.convertTo(mfloat, CV_32FC3);
+    }
+
+    // Apply scaling and mean subtraction
+    cv::cuda::subtract(mfloat, cv::Scalar(subVals[0], subVals[1], subVals[2]), mfloat, cv::noArray(), -1);
+    cv::cuda::divide(mfloat, cv::Scalar(divVals[0], divVals[1], divVals[2]), mfloat, 1, -1);
+
+    return mfloat;
+}
+
 std::string Engine::serializeEngineOptions(const Options &options, const std::string& onnxModelPath) {
     const auto filenamePos = onnxModelPath.find_last_of('/') + 1;
     std::string engineName = onnxModelPath.substr(filenamePos, onnxModelPath.find_last_of('.') - filenamePos) + ".engine";
@@ -424,8 +456,10 @@ std::string Engine::serializeEngineOptions(const Options &options, const std::st
     // Serialize the specified options into the filename
     if (options.precision == Precision::FP16) {
         engineName += ".fp16";
-    } else {
+    } else if (options.precision == Precision::FP32){
         engineName += ".fp32";
+    } else {
+        engineName += ".int8";
     }
 
     engineName += "." + std::to_string(options.maxBatchSize);
@@ -477,8 +511,9 @@ Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW
                                                const std::string &calibDataDirPath,
                                                const std::string &calibTableName,
                                                const std::string &inputBlobName,
-                                               float divVal,
                                                const std::array<float, 3>& subVals,
+                                               const std::array<float, 3>& divVals,
+                                               bool normalize,
                                                bool readCache)
         : m_batchSize(batchSize)
         , m_inputW(inputW)
@@ -486,8 +521,9 @@ Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW
         , m_imgIdx(0)
         , m_calibTableName(calibTableName)
         , m_inputBlobName(inputBlobName)
-        , m_divVal(divVal)
         , m_subVals(subVals)
+        , m_divVals(divVals)
+        , m_normalize(normalize)
         , m_readCache(readCache) {
 
     // Allocate GPU memory to hold the entire batch
@@ -524,29 +560,35 @@ bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32
     }
 
     // Read the calibration images into memory for the current batch
-    std::vector<cv::Mat> inputImgs;
+    std::vector<cv::cuda::GpuMat> inputImgs;
     for (int i = m_imgIdx; i < m_imgIdx + m_batchSize; i++) {
         std::cout << "Reading image " << i << ":" << m_imgPaths[i] << std::endl;
-        auto tmp = cv::imread(m_imgPaths[i]);
-        if (tmp.empty()){
+        auto cpuImg = cv::imread(m_imgPaths[i]);
+        if (cpuImg.empty()){
             std::cout << "Fatal error: Unable to read image at path: " << m_imgPaths[i] << std::endl;
             return false;
         }
 
+        cv::cuda::GpuMat gpuImg;
+        gpuImg.upload(cpuImg);
+        cv::cuda::cvtColor(gpuImg, gpuImg, cv::COLOR_BGR2RGB);
+
         // TODO: Define any preprocessing code here, such as resizing
         // In this example, we will assume the calibration images are already of the correct size
 
-        inputImgs.emplace_back(std::move(tmp));
+        inputImgs.emplace_back(std::move(gpuImg));
     }
 
-    m_imgIdx+= m_batchSize;
-    // Convert NHWC to NCHW, swap BGR to RGB
-    // Also apply any scaling and normalization
-    float multVal = 1.f / (255.f * m_divVal);
-    cv::Mat blob = cv::dnn::blobFromImages(inputImgs, multVal, cv::Size(m_inputW, m_inputH), cv::Scalar(m_subVals[0], m_subVals[1], m_subVals[2]), true, false);
-    // Upload the NCHW buffer to GPU memory
-    checkCudaErrorCode(cudaMemcpyAsync(m_deviceInput, blob.ptr<float>(0), m_inputCount * sizeof(float), cudaMemcpyHostToDevice));
+    // Convert the batch from NHWC to NCHW
+    // ALso apply normalization, scaling, and mean subtraction
 
+    auto mfloat = Engine::blobFromGpuMats(inputImgs, m_subVals, m_divVals, m_normalize);
+    auto *dataPointer = mfloat.ptr<void>();
+
+    // Copy the GPU buffer to member variable so that it persists
+    checkCudaErrorCode(cudaMemcpyAsync(m_deviceInput, dataPointer, m_inputCount * sizeof(float), cudaMemcpyDeviceToDevice));
+
+    m_imgIdx+= m_batchSize;
     names[0] = m_inputBlobName.c_str();
     bindings[0] = m_deviceInput;
     return true;

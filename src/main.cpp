@@ -57,8 +57,17 @@ int main(int argc, char *argv[]) {
 
     Engine engine(options);
 
+    // Define our preprocessing code
+    // The default Engine::build method will normalize values between [0.f, 1.f]
+    // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).
+
+    // For our model, we need the values to be normalized between [-1.f, 1.f] so we use the following params
+    std::array<float, 3> subVals {0.5f, 0.5f, 0.5f};
+    std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
+    bool normalize = true;
+    
     // Build the onnx model into a TensorRT engine file.
-    bool succ = engine.build(onnxModelPath);
+    bool succ = engine.build(onnxModelPath, subVals, divVals, normalize);
     if (!succ) {
         throw std::runtime_error("Unable to build TRT engine.");
     }
@@ -110,20 +119,11 @@ int main(int argc, char *argv[]) {
         inputs.emplace_back(std::move(input));
     }
 
-    // Define our preprocessing code
-    // The default Engine::runInference method will normalize values between [0.f, 1.f]
-    // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).
-
-    // For our model, we need the values to be normalized between [-1.f, 1.f] so we use the following params
-    std::array<float, 3> subVals {0.5f, 0.5f, 0.5f};
-    std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
-    bool normalize = true;
-
     // Warm up the network before we begin the benchmark
     std::cout << "\nWarming up the network..." << std::endl;
     std::vector<std::vector<std::vector<float>>> featureVectors;
     for (int i = 0; i < 10; ++i) {
-        succ = engine.runInference(inputs, featureVectors, subVals, divVals, normalize);
+        succ = engine.runInference(inputs, featureVectors);
         if (!succ) {
             throw std::runtime_error("Unable to run inference.");
         }
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
     preciseStopwatch stopwatch;
     for (size_t i = 0; i < numIterations; ++i) {
         featureVectors.clear();
-        engine.runInference(inputs, featureVectors, subVals, divVals, normalize);
+        engine.runInference(inputs, featureVectors);
     }
     auto totalElapsedTimeMs = stopwatch.elapsedTime<float, std::chrono::milliseconds>();
     auto avgElapsedTimeMs = totalElapsedTimeMs / numIterations / static_cast<float>(inputs[0].size());

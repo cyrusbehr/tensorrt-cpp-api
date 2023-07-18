@@ -27,8 +27,14 @@ namespace Util {
 
 // Precision used for GPU inference
 enum class Precision {
+    // Full precision floating point value
     FP32,
-    FP16
+    // Half prevision floating point value
+    FP16,
+    // Int8 quantization.
+    // Has reduced dynamic range, may result in slight loss in accuracy.
+    // If INT8 is selected, must provide path to calibration dataset directory to Engine::build method.
+    INT8,
 };
 
 // Options for the network
@@ -46,12 +52,8 @@ struct Options {
 // Class used for int8 calibration
 class Int8EntropyCalibrator2 : public nvinfer1::IInt8EntropyCalibrator2 {
 public:
-    // The default constructor params will normalize input values between [0.f, 1.f]
-    // If the model requires values to be normalized between [-1.f, 1.f], use the following params:
-    //    divVal = 0.5f;
-    //    subVals = {0.5f, 0.5f, 0.5f};
     Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW, int32_t inputH, const std::string& calibDataDirPath, const std::string& calibTableName, const std::string& inputBlobName,
-                           float divVal = 1.f, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f}, bool readCache = true);
+                           const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}, bool normalize = true, bool readCache = true);
     virtual ~Int8EntropyCalibrator2();
     // Abstract base class methods which must be implemented
     int32_t getBatchSize () const noexcept override;
@@ -67,8 +69,9 @@ private:
     size_t m_inputCount;
     const std::string m_calibTableName;
     const std::string m_inputBlobName;
-    const float m_divVal;
     const std::array<float, 3> m_subVals;
+    const std::array<float, 3> m_divVals;
+    const bool m_normalize;
     const bool m_readCache;
     void* m_deviceInput;
     std::vector<char> m_calibCache;
@@ -84,22 +87,20 @@ public:
     Engine(const Options& options);
     ~Engine();
     // Build the network
-    bool build(std::string onnxModelPath);
-    // Load and prepare the network for inference
-    bool loadNetwork();
-    // Run inference.
-    // Input format [input][batch][cv::cuda::GpuMat]
-    // Output format [batch][output][feature_vector]
-    // The default runInference method will normalize values between [0.f, 1.f]
+    // The default implementation will normalize values between [0.f, 1.f]
     // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).
     // If the model requires values to be normalized between [-1.f, 1.f], use the following params:
     //    subVals = {0.5f, 0.5f, 0.5f};
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
-    std::array<float, 3> subVals {0.5f, 0.5f, 0.5f};
-    std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
-    bool runInference(const std::vector<std::vector<cv::cuda::GpuMat>>& inputs, std::vector<std::vector<std::vector<float>>>& featureVectors, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f},
-                      const std::array<float, 3>& divVals = {1.f, 1.f, 1.f}, bool normalize = true);
+    bool build(std::string onnxModelPath, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f}, const std::array<float, 3>& divVals = {1.f, 1.f, 1.f},
+               bool normalize = true, const std::string& calibDataDirPath = "");
+    // Load and prepare the network for inference
+    bool loadNetwork();
+    // Run inference.
+    // Input format [input][batch][cv::cuda::GpuMat]
+    // Output format [batch][output][feature_vector]
+    bool runInference(const std::vector<std::vector<cv::cuda::GpuMat>>& inputs, std::vector<std::vector<std::vector<float>>>& featureVectors);
 
     // Utility method for resizing an image while maintaining the aspect ratio by adding padding to smaller dimension after scaling
     // While letterbox padding normally adds padding to top & bottom, or left & right sides, this implementation only adds padding to the right or bottom side
@@ -116,11 +117,18 @@ public:
     // Utility method for transforming triple nested output array into single array
     // Should be used when the output batch size is 1, and there is only a single output feature vector
     static void transformOutput(std::vector<std::vector<std::vector<float>>>& input, std::vector<float>& output);
+    // Convert NHWC to NCHW and apply scaling and mean subtraction
+    static cv::cuda::GpuMat blobFromGpuMats(const std::vector<cv::cuda::GpuMat>& batchInput, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize);
 private:
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options& options, const std::string& onnxModelPath);
 
     void getDeviceNames(std::vector<std::string>& deviceNames);
+
+    // Normalization, scaling, and mean subtraction of inputs
+    std::array<float, 3> m_subVals{};
+    std::array<float, 3> m_divVals{};
+    bool m_normalize;
 
     // Holds pointers to the input and output GPU buffers
     std::vector<void*> m_buffers;
@@ -131,7 +139,7 @@ private:
 
     // Must keep IRuntime around for inference, see: https://forums.developer.nvidia.com/t/is-it-safe-to-deallocate-nvinfer1-iruntime-after-creating-an-nvinfer1-icudaengine-but-before-running-inference-with-said-icudaengine/255381/2?u=cyruspk4w6
     std::unique_ptr<nvinfer1::IRuntime> m_runtime = nullptr;
-
+    std::unique_ptr<Int8EntropyCalibrator2> m_calibrator = nullptr;
     std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
     Options m_options;
