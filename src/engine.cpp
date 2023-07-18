@@ -591,7 +591,10 @@ bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32
     checkCudaErrorCode(cudaMemcpyAsync(m_deviceInput, dataPointer, m_inputCount * sizeof(float), cudaMemcpyDeviceToDevice));
 
     m_imgIdx+= m_batchSize;
-    names[0] = m_inputBlobName.c_str();
+    if (std::string(names[0]) != m_inputBlobName) {
+        std::cout << "Error: Incorrect input name provided!" << std::endl;
+        return false;
+    }
     bindings[0] = m_deviceInput;
     return true;
 }
