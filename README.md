@@ -112,6 +112,14 @@ It is advised to use 1K+ calibration images. To enable INT8 inference with the Y
 ### Benchmarks
 Benchmarks run on RTX 3050 Ti Laptop GPU, 11th Gen Intel(R) Core(TM) i9-11900H @ 2.50GHz.
 
+| Model   | Precision | Batch Size | Avg Inference Time |
+|---------|-----------|------------|--------------------|
+| yolov8n | FP32      | 1          | 4.732 ms           |
+| yolov8n | FP16      | 1          | 2.493 ms           |
+| yolov8n | INT8      | 1          | 2.009 ms           |
+| yolov8x | FP32      | 1          | 76.63 ms           |
+| yolov8x | FP16      | 1          | 25.08 ms           |
+| yolov8x | INT8      | 1          | 11.62 ms           |
 
 ### Sample Integration
 Wondering how to integrate this library into your project? Or perhaps how to read the outputs of the YoloV8 model to extract meaningful information? 
