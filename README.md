@@ -105,6 +105,9 @@ It is advised to use 1K+ calibration images. To enable INT8 inference with the Y
 - Make sure the resizing code in the `Int8EntropyCalibrator2::getBatch` method in `engine.cpp` (see `TODO`) is correct for your model.
   - If using the YoloV8 model, the preprocessing code is correct and does not need to be changed.
 - Recompile, run the executable. 
+- The calibration cache will be written to disk (`.calibration` extension) so that on subsequent model optimizations it can be reused. If you'd like to regenerate the calibration data, you must delete this cache file.  
+
+### Benchmarks
 
 ### Sample Integration
 Wondering how to integrate this library into your project? Or perhaps how to read the outputs of the YoloV8 model to extract meaningful information? 
@@ -120,8 +123,6 @@ If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyr
 ### Show your Appreciation
 If this project was helpful to you, I would appreciate if you could give it a star. That will encourage me to ensure it's up to date and solve issues quickly. I also do consulting work if you require more specific help. Connect with me on [LinkedIn](https://www.linkedin.com/in/cyrus-behroozi/). 
 
-TODO Cyrus: Benchmarks, and v4.0
-
 ### Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
@@ -134,6 +135,11 @@ TODO Cyrus: Benchmarks, and v4.0
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ### Changelog
+
+**V4.0**
+
+- Added support for INT8 precision.
+
 
 **V3.0**
 
