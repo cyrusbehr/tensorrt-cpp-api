@@ -45,7 +45,7 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
-You will need to supply your own onnx model for this sample code, or you can download the sample model (see Sanity Check section below). 
+You will need to supply your own onnx model for this sample code or you can download the sample model (see Sanity Check section below). 
 
 ### Prerequisites
 - Tested and working on Ubuntu 20.04
@@ -78,7 +78,8 @@ You will need to supply your own onnx model for this sample code, or you can dow
 ### Sanity Check
 - To perform a sanity check, download the `YOLOv8n` model from [here](https://github.com/ultralytics/ultralytics#models).
 - Next, convert it from pytorch to onnx using the following script:
-
+  - You will need to run `pip3 install ultralytics` first. 
+  - 
 ```python
 from ultralytics import YOLO
 model = YOLO("./yolov8n.pt")
@@ -98,10 +99,10 @@ model.export(format="onnx", opset=12) # Export the model to onnx using opset 12
 Enabling INT8 precision can further speed up inference at the cost of accuracy reduction due to reduced dynamic range. 
 For INT8 precision, the user must supply calibration data which is representative of real data the model will see. 
 It is advised to use 1K+ calibration images. To enable INT8 inference with the YoloV8 sanity check model, the following steps must be taken:
--  Change `options.precision = Precision::FP16;` to `options.precision = Precision::INT8;`
-- `options.calibrationDataDirectoryPath = "";` must be changed to specify path containing calibration data. 
+-  Change `options.precision = Precision::FP16;` to `options.precision = Precision::INT8;` in `main.cpp`
+- `options.calibrationDataDirectoryPath = "";` must be changed in `main.cpp` to specify path containing calibration data. 
   - If using the YoloV8 model, it is advised to used the COCO validation dataset, which can be downloaded with `wget http://images.cocodataset.org/zips/val2017.zip`
-- Make sure the resizing code in the `Int8EntropyCalibrator2::getBatch` method (see `TODO`) is correct for your model.
+- Make sure the resizing code in the `Int8EntropyCalibrator2::getBatch` method in `engine.cpp` (see `TODO`) is correct for your model.
   - If using the YoloV8 model, the preprocessing code is correct and does not need to be changed.
 - Recompile, run the executable. 
 
