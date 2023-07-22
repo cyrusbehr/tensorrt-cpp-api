@@ -74,6 +74,7 @@ You will need to supply your own onnx model for this sample code or you can down
 - Run the executable and provide the path to your onnx model.
 - ex. `./run_inference_benchmark ../models/yolov8n.onnx`
   - Note: See sanity check section below for instructions on how to obtain the yolov8n model.  
+- The first time you run the executable for a given model and options, a TensorRT engine file will be built from your onnx model. This process is fairly slow and can take 5+ minutes for some models (ex. yolo models). 
 
 ### Sanity Check
 - To perform a sanity check, download the `YOLOv8n` model from [here](https://github.com/ultralytics/ultralytics#models).
@@ -106,8 +107,11 @@ It is advised to use 1K+ calibration images. To enable INT8 inference with the Y
   - If using the YoloV8 model, the preprocessing code is correct and does not need to be changed.
 - Recompile, run the executable. 
 - The calibration cache will be written to disk (`.calibration` extension) so that on subsequent model optimizations it can be reused. If you'd like to regenerate the calibration data, you must delete this cache file.  
+- If you get an "out of memory in function allocate" error, then you must reduce `Options.calibrationBatchSize` so that the entire batch can fit in your GPU memory. 
 
 ### Benchmarks
+Benchmarks run on RTX 3050 Ti Laptop GPU, 11th Gen Intel(R) Core(TM) i9-11900H @ 2.50GHz.
+
 
 ### Sample Integration
 Wondering how to integrate this library into your project? Or perhaps how to read the outputs of the YoloV8 model to extract meaningful information? 

@@ -63,6 +63,9 @@ struct Options {
     Precision precision = Precision::FP16;
     // If INT8 precision is selected, must provide path to calibration dataset directory.
     std::string calibrationDataDirectoryPath;
+    // The batch size to be used when computing calibration data for INT8 inference.
+    // Should be set to as large a batch number as your GPU will support.
+    int32_t calibrationBatchSize = 128;
     // The batch size which should be optimized for.
     int32_t optBatchSize = 1;
     // Maximum allowable batch size

@@ -169,8 +169,7 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
         const auto inputDims = input->getDimensions();
         const auto calibrationFileName = m_engineName + ".calibration";
 
-        // TODO Cyrus: Not sure what the optimal batch size is for this
-        m_calibrator = std::make_unique<Int8EntropyCalibrator2>(64, inputDims.d[3], inputDims.d[2], m_options.calibrationDataDirectoryPath,
+        m_calibrator = std::make_unique<Int8EntropyCalibrator2>(m_options.calibrationBatchSize, inputDims.d[3], inputDims.d[2], m_options.calibrationDataDirectoryPath,
                                                                 calibrationFileName, inputName, subVals, divVals, normalize);
         config->setInt8Calibrator(m_calibrator.get());
     }
