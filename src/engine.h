@@ -53,14 +53,16 @@ enum class Precision {
     FP16,
     // Int8 quantization.
     // Has reduced dynamic range, may result in slight loss in accuracy.
-    // If INT8 is selected, must provide path to calibration dataset directory to Engine::build method.
+    // If INT8 is selected, must provide path to calibration dataset directory.
     INT8,
 };
 
 // Options for the network
 struct Options {
-    // Precision to use for GPU inference. 16 bit is faster but may reduce accuracy.
+    // Precision to use for GPU inference.
     Precision precision = Precision::FP16;
+    // If INT8 precision is selected, must provide path to calibration dataset directory.
+    std::string calibrationDataDirectoryPath;
     // The batch size which should be optimized for.
     int32_t optBatchSize = 1;
     // Maximum allowable batch size
@@ -114,7 +116,7 @@ public:
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
     bool build(std::string onnxModelPath, const std::array<float, 3>& subVals = {0.f, 0.f, 0.f}, const std::array<float, 3>& divVals = {1.f, 1.f, 1.f},
-               bool normalize = true, const std::string& calibDataDirPath = "");
+               bool normalize = true);
     // Load and prepare the network for inference
     bool loadNetwork();
     // Run inference.
@@ -162,7 +164,7 @@ private:
     std::unique_ptr<Int8EntropyCalibrator2> m_calibrator = nullptr;
     std::unique_ptr<nvinfer1::ICudaEngine> m_engine = nullptr;
     std::unique_ptr<nvinfer1::IExecutionContext> m_context = nullptr;
-    Options m_options;
+    const Options m_options;
     Logger m_logger;
     std::string m_engineName;
 };

@@ -33,7 +33,7 @@ Engine::Engine(const Options &options)
     : m_options(options) {}
 
 bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals,
-                   bool normalize, const std::string& calibDataDirPath) {
+                   bool normalize) {
     m_subVals = subVals;
     m_divVals = divVals;
     m_normalize = normalize;
@@ -140,7 +140,7 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
     }
     config->addOptimizationProfile(optProfile);
 
-    // If the user specified FP16 precision, set that here.
+    // Set the precision level
     if (m_options.precision == Precision::FP16) {
         // Ensure the GPU supports FP16 inference
         if (!builder->platformHasFastFp16()) {
@@ -158,7 +158,7 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
         }
 
         // Ensure the user has provided path to calibration data directory
-        if (calibDataDirPath.empty()) {
+        if (m_options.calibrationDataDirectoryPath.empty()) {
             throw std::runtime_error("Error: If INT8 precision is selected, must provide path to calibration data directory to Engine::build method");
         }
 
@@ -170,7 +170,8 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
         const auto calibrationFileName = m_engineName + ".calibration";
 
         // TODO Cyrus: Not sure what the optimal batch size is for this
-        m_calibrator = std::make_unique<Int8EntropyCalibrator2>(64, inputDims.d[3], inputDims.d[2], calibDataDirPath, calibrationFileName, inputName, subVals, divVals, normalize);
+        m_calibrator = std::make_unique<Int8EntropyCalibrator2>(64, inputDims.d[3], inputDims.d[2], m_options.calibrationDataDirectoryPath,
+                                                                calibrationFileName, inputName, subVals, divVals, normalize);
         config->setInt8Calibrator(m_calibrator.get());
     }
 
@@ -576,14 +577,13 @@ bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32
         cv::cuda::cvtColor(gpuImg, gpuImg, cv::COLOR_BGR2RGB);
 
         // TODO: Define any preprocessing code here, such as resizing
-        // In this example, we will assume the calibration images are already of the correct size
+        auto resized = Engine::resizeKeepAspectRatioPadRightBottom(gpuImg, m_inputH, m_inputW);
 
-        inputImgs.emplace_back(std::move(gpuImg));
+        inputImgs.emplace_back(std::move(resized));
     }
 
     // Convert the batch from NHWC to NCHW
     // ALso apply normalization, scaling, and mean subtraction
-
     auto mfloat = Engine::blobFromGpuMats(inputImgs, m_subVals, m_divVals, m_normalize);
     auto *dataPointer = mfloat.ptr<void>();
 

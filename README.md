@@ -2,8 +2,6 @@
 [![Issues][issues-shield]][issues-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 
-
-
 <!-- PROJECT LOGO -->
 <br />
 <p align="center">
@@ -32,15 +30,17 @@
 
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference on image data. It covers how to do the following:
 - How to install TensorRT 8 on Ubuntu 20.04.
-- How to generate a TRT engine file optimized for your GPU.
+- How to generate a TensorRT engine file optimized for your GPU.
 - How to specify a simple optimization profile.
+- How to run FP32, FP16, or INT8 precision inference. 
 - How to read / write data from / into GPU memory and work with GPU images.
 - How to use cuda stream to run async inference and later synchronize. 
 - How to work with models with static and dynamic batch sizes.
-- **New:** Supports models with multiple output tensors (and even works with batching).
-- **New:** Supports models with multiple inputs.
-- **New:** New [video walkthrough](https://youtu.be/Z0n5aLmcRHQ) where I explain every line of code.
-- The code can be used as a base for many models, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV7](https://github.com/WongKinYiu/yolov7), [SCRFD](https://insightface.ai/scrfd) face detection, and many other single / multiple input - single / multiple output models. You will just need to implement the appropriate post-processing code.
+- How to work with models with single or multiple output tensors.
+- How to work with models with multiple inputs.
+- Includes a [Video walkthrough](https://youtu.be/Z0n5aLmcRHQ) where I explain every line of code.
+- The code can be used as a base for any model which takes a fixed size image / images as input, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV8](https://github.com/ultralytics/ultralytics), [SCRFD](https://insightface.ai/scrfd) face detection.
+  - You will just need to implement the appropriate post-processing code.
 - TODO: Add support for models with dynamic input shapes.
 
 ## Getting Started
@@ -72,20 +72,42 @@ You will need to supply your own onnx model for this sample code, or you can dow
 ### Running the Executable
 - Navigate to the build directory
 - Run the executable and provide the path to your onnx model.
-- ex. `./run_inference_benchmark ../models/arcfaceresnet100-8.onnx`
-  - Note: See sanity check section below for instructions on how to obtain the arcface model.  
+- ex. `./run_inference_benchmark ../models/yolov8n.onnx`
+  - Note: See sanity check section below for instructions on how to obtain the yolov8n model.  
 
 ### Sanity Check
-- To perform a sanity check, download the following [ArcFace model](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface) from [here](https://github.com/onnx/models/blob/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx) and place it in the `./models/` directory.
-- Running inference using said model and the image located in `./inputs/face_chip.jpg` should produce the following feature vector:
-  - Note: The feature vector will not be identical (but very similar) as [TensorRT is not deterministic](https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#determinism). 
-```text
--0.0548096 -0.0994873 0.176514 0.161377 0.226807 0.215942 -0.296143 -0.0601807 0.240112 -0.18457 ...
+- To perform a sanity check, download the `YOLOv8n` model from [here](https://github.com/ultralytics/ultralytics#models).
+- Next, convert it from pytorch to onnx using the following script:
+
+```python
+from ultralytics import YOLO
+model = YOLO("./yolov8n.pt")
+model.fuse()
+model.info(verbose=False)  # Print model information
+model.export(format="onnx", opset=12) # Export the model to onnx using opset 12
 ```
 
+- Place the resulting onnx model, `yolov8n.onnx`, in the `./models/` directory. 
+- Running inference using said model and the image located in `./inputs/team.jpg` should produce the following feature vector:
+  - Note: The feature vector will not be identical (but very similar) as [TensorRT is not deterministic](https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#determinism). 
+```text
+3.41113 16.5312 20.8828 29.8984 43.7266 54.9609 62.0625 65.8594 70.0312 72.9531 ...
+```
+
+### INT8 Inference
+Enabling INT8 precision can further speed up inference at the cost of accuracy reduction due to reduced dynamic range. 
+For INT8 precision, the user must supply calibration data which is representative of real data the model will see. 
+It is advised to use 1K+ calibration images. To enable INT8 inference with the YoloV8 sanity check model, the following steps must be taken:
+-  Change `options.precision = Precision::FP16;` to `options.precision = Precision::INT8;`
+- `options.calibrationDataDirectoryPath = "";` must be changed to specify path containing calibration data. 
+  - If using the YoloV8 model, it is advised to used the COCO validation dataset, which can be downloaded with `wget http://images.cocodataset.org/zips/val2017.zip`
+- Make sure the resizing code in the `Int8EntropyCalibrator2::getBatch` method (see `TODO`) is correct for your model.
+  - If using the YoloV8 model, the preprocessing code is correct and does not need to be changed.
+- Recompile, run the executable. 
+
 ### Sample Integration
-Wondering how to integrate this library into your project? Or perhaps how to read the outputs to extract meaningful information? 
-If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP), which demonstrates how to use the TensorRT C++ API to run YoloV8 inference (supports segmentation). It makes use of this project in the backend!
+Wondering how to integrate this library into your project? Or perhaps how to read the outputs of the YoloV8 model to extract meaningful information? 
+If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP), which demonstrates how to use the TensorRT C++ API to run YoloV8 inference (supports object detection, semantic segmentation, and body pose estimation). It makes use of this project in the backend!
 
 ### Understanding the Code
 - The bulk of the implementation is in `src/engine.cpp`. I have written lots of comments all throughout the code which should make it easy to understand what is going on. 
@@ -96,6 +118,19 @@ If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyr
 
 ### Show your Appreciation
 If this project was helpful to you, I would appreciate if you could give it a star. That will encourage me to ensure it's up to date and solve issues quickly. I also do consulting work if you require more specific help. Connect with me on [LinkedIn](https://www.linkedin.com/in/cyrus-behroozi/). 
+
+TODO Cyrus: Benchmarks, and v4.0
+
+### Contributors
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ### Changelog
 

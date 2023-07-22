@@ -29,6 +29,8 @@ int main(int argc, char *argv[]) {
     // Specify what precision to use for inference
     // FP16 is approximately twice as fast as FP32.
     options.precision = Precision::FP16;
+    // If using INT8 precision, must specify path to directory containing calibration data.
+    options.calibrationDataDirectoryPath = "";
     // If the model does not support dynamic batch size, then the below two parameters must be set to 1.
     // Specify the batch size to optimize for.
     options.optBatchSize = 1;
@@ -41,10 +43,16 @@ int main(int argc, char *argv[]) {
     // The default Engine::build method will normalize values between [0.f, 1.f]
     // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).
 
-    // For our model, we need the values to be normalized between [-1.f, 1.f] so we use the following params
-    std::array<float, 3> subVals {0.5f, 0.5f, 0.5f};
-    std::array<float, 3> divVals {0.5f, 0.5f, 0.5f};
+    // For our YoloV8 model, we need the values to be normalized between [0.f, 1.f] so we use the following params
+    std::array<float, 3> subVals {0.f, 0.f, 0.f};
+    std::array<float, 3> divVals {1.f, 1.f, 1.f};
     bool normalize = true;
+    // Note, we could have also used the default values.
+
+    // If the model requires values to be normalized between [-1.f, 1.f], use the following params:
+    //    subVals = {0.5f, 0.5f, 0.5f};
+    //    divVals = {0.5f, 0.5f, 0.5f};
+    //    normalize = true;
     
     // Build the onnx model into a TensorRT engine file.
     bool succ = engine.build(onnxModelPath, subVals, divVals, normalize);
@@ -60,7 +68,7 @@ int main(int argc, char *argv[]) {
 
     // Read the input image
     // TODO: You will need to read the input image required for your model
-    const std::string inputImage = "../inputs/face_chip.jpg";
+    const std::string inputImage = "../inputs/team.jpg";
     auto cpuImg = cv::imread(inputImage);
     if (cpuImg.empty()) {
         throw std::runtime_error("Unable to read image at path: " + inputImage);
@@ -80,20 +88,18 @@ int main(int argc, char *argv[]) {
     // Let's use a batch size which matches that which we set the Options.optBatchSize option
     size_t batchSize = options.optBatchSize;
 
-
     // TODO:
     // For the sake of the demo, we will be feeding the same image to all the inputs
     // You should populate your inputs appropriately.
     for (const auto & inputDim : inputDims) { // For each of the model inputs...
         std::vector<cv::cuda::GpuMat> input;
         for (size_t j = 0; j < batchSize; ++j) { // For each element we want to add to the batch...
-            cv::cuda::GpuMat resized;
             // TODO:
             // You can choose to resize by scaling, adding padding, or a combination of the two in order to maintain the aspect ratio
             // You can use the Engine::resizeKeepAspectRatioPadRightBottom to resize to a square while maintain the aspect ratio (adds padding where necessary to achieve this).
-            // If you are running the sample code using the suggested model, then the input image already has the correct size.
-            // The following resizes without maintaining aspect ratio so use carefully!
-            cv::cuda::resize(img, resized, cv::Size(inputDim.d[2], inputDim.d[1])); // TRT dims are (height, width) whereas OpenCV is (width, height)
+            auto resized = Engine::resizeKeepAspectRatioPadRightBottom(img, inputDim.d[1], inputDim.d[2]);
+            // You could also perform a resize operation without maintaining aspect ratio with the use of padding by using the following instead:
+//            cv::cuda::resize(img, resized, cv::Size(inputDim.d[2], inputDim.d[1])); // TRT dims are (height, width) whereas OpenCV is (width, height)
             input.emplace_back(std::move(resized));
         }
         inputs.emplace_back(std::move(input));
@@ -102,7 +108,7 @@ int main(int argc, char *argv[]) {
     // Warm up the network before we begin the benchmark
     std::cout << "\nWarming up the network..." << std::endl;
     std::vector<std::vector<std::vector<float>>> featureVectors;
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 100; ++i) {
         succ = engine.runInference(inputs, featureVectors);
         if (!succ) {
             throw std::runtime_error("Unable to run inference.");
@@ -110,7 +116,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Benchmark the inference time
-    size_t numIterations = 250;
+    size_t numIterations = 1000;
     std::cout << "Warmup done. Running benchmarks (" << numIterations << " iterations)...\n" << std::endl;
     preciseStopwatch stopwatch;
     for (size_t i = 0; i < numIterations; ++i) {
