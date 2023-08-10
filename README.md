@@ -79,8 +79,8 @@ You will need to supply your own onnx model for this sample code or you can down
 ### Sanity Check
 - To perform a sanity check, download the `YOLOv8n` model from [here](https://github.com/ultralytics/ultralytics#models).
 - Next, convert it from pytorch to onnx using the following script:
-  - You will need to run `pip3 install ultralytics` first. 
-  - 
+  - You will need to run `pip3 install ultralytics` first.
+     
 ```python
 from ultralytics import YOLO
 model = YOLO("./yolov8n.pt")
