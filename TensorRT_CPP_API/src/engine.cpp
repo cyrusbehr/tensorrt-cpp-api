@@ -19,7 +19,6 @@
 #endif
 #endif
 
-
 using namespace nvinfer1;
 using namespace EngineUtil;
 
@@ -33,13 +32,13 @@ void EngineUtil::getFilesInDirectory(const std::string& dirPath, std::vector<std
 #else
 #if defined(WIN32) || defined(_WIN32) || defined(_WIN32_) || defined(WIN64) || defined(_WIN64) || defined(_WIN64_)
     _finddata_t fileInfo;
-    const long lf = _findfirst(dirPath.c_str(), &fileInfo);
+    const auto lf = _findfirst((dirPath + "/*").c_str(), &fileInfo);
     while (_findnext(lf, &fileInfo) == 0) {
         // The subdirectories are skipped.
         // The special path names dot and dot-dot are skipped too.
         if (fileInfo.attrib & _A_SUBDIR)
             continue;
-        filepaths.emplace_back(fileInfo.name);
+        filepaths.emplace_back(dirPath + "/" + fileInfo.name);
     }
     _findclose(lf);
 #elif defined(__linux__)
@@ -58,20 +57,36 @@ void Logger::log(Severity severity, const char* msg) noexcept {
     }
 }
 
-Engine::Engine(const EngineOptions& options)
-    : m_options(options) {}
+Logger Engine::m_logger{};
 
-bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals,
-    bool normalize) {
-    m_subVals = subVals;
-    m_divVals = divVals;
-    m_normalize = normalize;
+Engine::Engine()
+    : m_subVals({0.f, 0.f, 0.f})
+    , m_divVals({1.f, 1.f, 1.f})
+    , m_normalize(true)
+{
+    
+}
 
+Engine::~Engine() {
+    // Free the GPU memory
+    for (const auto& buffer : m_buffers) {
+        checkCudaErrorCode(cudaFree(buffer));
+    }
+
+    m_buffers.clear();
+}
+
+bool Engine::build(const std::string& onnxModelPath,
+                   const EngineOptions& engineOptions,
+                   const std::array<float, 3>& subVals,
+                   const std::array<float, 3>& divVals,
+                   bool normalize)
+{
     // Only regenerate the engine file if it has not already been generated for the specified options
-    m_engineName = serializeEngineOptions(m_options, onnxModelPath);
-    std::cout << "Searching for engine file with name: " << m_engineName << std::endl;
+    std::string engineName = serializeEngineOptions(engineOptions, onnxModelPath);
+    std::cout << "Searching for engine file with name: " << engineName << std::endl;
 
-    if (doesFileExist(m_engineName)) {
+    if (doesFileExist(engineName)) {
         std::cout << "Engine found, not regenerating..." << std::endl;
         return true;
     }
@@ -139,7 +154,7 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
     else if (input0Batch == 1) {
         std::cout << "Model only supports fixed batch size of 1" << std::endl;
         // If the model supports a fixed batch size, ensure that the maxBatchSize and optBatchSize were set correctly.
-        if (m_options.optBatchSize != input0Batch || m_options.maxBatchSize != input0Batch) {
+        if (engineOptions.optBatchSize != input0Batch || engineOptions.maxBatchSize != input0Batch) {
             throw std::runtime_error("Error, model only supports a fixed batch size of 1. Must set EngineOptions.optBatchSize and EngineOptions.maxBatchSize to 1");
         }
     }
@@ -166,20 +181,22 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
 
         // Specify the optimization profile`
         optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
-        optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
-        optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+        optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(engineOptions.optBatchSize, inputC, inputH, inputW));
+        optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(engineOptions.maxBatchSize, inputC, inputH, inputW));
     }
     config->addOptimizationProfile(optProfile);
 
+    std::unique_ptr<Int8EntropyCalibrator2> calibrator;
+
     // Set the precision level
-    if (m_options.precision == Precision::FP16) {
+    if (engineOptions.precision == Precision::FP16) {
         // Ensure the GPU supports FP16 inference
         if (!builder->platformHasFastFp16()) {
             throw std::runtime_error("Error: GPU does not support FP16 precision");
         }
         config->setFlag(BuilderFlag::kFP16);
     }
-    else if (m_options.precision == Precision::INT8) {
+    else if (engineOptions.precision == Precision::INT8) {
         if (numInputs > 1) {
             throw std::runtime_error("Error, this implementation currently only supports INT8 quantization for single input models");
         }
@@ -190,7 +207,7 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
         }
 
         // Ensure the user has provided path to calibration data directory
-        if (m_options.calibrationDataDirectoryPath.empty()) {
+        if (engineOptions.calibrationDataDirectoryPath.empty()) {
             throw std::runtime_error("Error: If INT8 precision is selected, must provide path to calibration data directory to Engine::build method");
         }
 
@@ -199,11 +216,18 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
         const auto input = network->getInput(0);
         const auto inputName = input->getName();
         const auto inputDims = input->getDimensions();
-        const auto calibrationFileName = m_engineName + ".calibration";
+        const auto calibrationFileName = engineName + ".calibration";
 
-        m_calibrator = std::make_unique<Int8EntropyCalibrator2>(m_options.calibrationBatchSize, inputDims.d[3], inputDims.d[2], m_options.calibrationDataDirectoryPath,
-            calibrationFileName, inputName, subVals, divVals, normalize);
-        config->setInt8Calibrator(m_calibrator.get());
+        calibrator.reset(new Int8EntropyCalibrator2(engineOptions.calibrationBatchSize,
+                                                    inputDims.d[3],
+                                                    inputDims.d[2],
+                                                    engineOptions.calibrationDataDirectoryPath,
+                                                    calibrationFileName,
+                                                    inputName,
+                                                    subVals,
+                                                    divVals,
+                                                    normalize));
+        config->setInt8Calibrator(calibrator.get());
     }
 
     // CUDA stream used for profiling by the builder.
@@ -220,28 +244,48 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
     }
 
     // Write the engine to disk
-    std::ofstream outfile(m_engineName, std::ofstream::binary);
-    outfile.write(reinterpret_cast<const char*>(plan->data()), plan->size());
+    std::ofstream outfile(engineName, std::ofstream::binary);
+    outfile.write(static_cast<const char*>(plan->data()), plan->size());
 
-    std::cout << "Success, saved engine to " << m_engineName << std::endl;
+    std::cout << "Success, saved engine to " << engineName << std::endl;
 
     checkCudaErrorCode(cudaStreamDestroy(profileStream));
     return true;
 }
 
-Engine::~Engine() {
-    // Free the GPU memory
-    for (auto& buffer : m_buffers) {
+bool Engine::loadNetwork(const std::string& enginePath,
+                         const EngineOptions& engineOptions,
+                         const std::array<float, 3>& subVals,
+                         const std::array<float, 3>& divVals,
+                         bool normalize)
+{
+    m_subVals = subVals;
+    m_divVals = divVals;
+    m_normalize = normalize;
+
+    for (const auto& buffer : m_buffers) {
         checkCudaErrorCode(cudaFree(buffer));
     }
-
     m_buffers.clear();
-}
+    m_outputLengthsFloat.clear();
+    m_inputDims.clear();
+    m_outputDims.clear();
+    m_IOTensorNames.clear();
 
-bool Engine::loadNetwork() {
+    m_context.reset();
+    m_engine.reset();
+    m_runtime.reset();
+
+    m_engineOptions = engineOptions;
+
+    if (!doesFileExist(enginePath))
+    {
+        throw std::runtime_error("Could not find engine at path: " + enginePath);
+    }
+
     // Read the serialized model from disk
-    std::ifstream file(m_engineName, std::ios::binary | std::ios::ate);
-    std::streamsize size = file.tellg();
+    std::ifstream file(enginePath, std::ios::binary | std::ios::ate);
+    const std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
 
     std::vector<char> buffer(size);
@@ -250,29 +294,29 @@ bool Engine::loadNetwork() {
     }
 
     // Create a runtime to deserialize the engine file.
-    m_runtime = std::unique_ptr<IRuntime>{ createInferRuntime(m_logger) };
+    m_runtime.reset(createInferRuntime(m_logger));
     if (!m_runtime) {
         return false;
     }
 
     // Set the device index
-    auto ret = cudaSetDevice(m_options.deviceIndex);
+    const auto ret = cudaSetDevice(m_engineOptions.deviceIndex);
     if (ret != 0) {
         int numGPUs;
         cudaGetDeviceCount(&numGPUs);
-        auto errMsg = "Unable to set GPU device index to: " + std::to_string(m_options.deviceIndex) +
-            ". Note, your device has " + std::to_string(numGPUs) + " CUDA-capable GPU(s).";
+        const auto errMsg = "Unable to set GPU device index to: " + std::to_string(m_engineOptions.deviceIndex) +
+                            ". Note, your device has " + std::to_string(numGPUs) + " CUDA-capable GPU(s).";
         throw std::runtime_error(errMsg);
     }
 
     // Create an engine, a representation of the optimized model.
-    m_engine = std::unique_ptr<nvinfer1::ICudaEngine>(m_runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
+    m_engine.reset(m_runtime->deserializeCudaEngine(buffer.data(), buffer.size()));
     if (!m_engine) {
         return false;
     }
 
     // The execution context contains all of the state associated with a particular invocation
-    m_context = std::unique_ptr<nvinfer1::IExecutionContext>(m_engine->createExecutionContext());
+    m_context.reset(m_engine->createExecutionContext());
     if (!m_context) {
         return false;
     }
@@ -295,7 +339,7 @@ bool Engine::loadNetwork() {
         if (tensorType == TensorIOMode::kINPUT) {
             // Allocate memory for the input
             // Allocate enough to fit the max batch size (we could end up using less later)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], m_options.maxBatchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * sizeof(float), stream));
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], m_engineOptions.maxBatchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * sizeof(float), stream));
 
             // Store the input dims for later use
             m_inputDims.emplace_back(tensorShape.d[1], tensorShape.d[2], tensorShape.d[3]);
@@ -312,7 +356,7 @@ bool Engine::loadNetwork() {
 
             m_outputLengthsFloat.push_back(outputLenFloat);
             // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * m_options.maxBatchSize * sizeof(float), stream));
+            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * m_engineOptions.maxBatchSize * sizeof(float), stream));
         }
         else {
             throw std::runtime_error("Error, IO Tensor is neither an input or output!");
@@ -342,10 +386,10 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>>& inpu
     }
 
     // Ensure the batch size does not exceed the max
-    if (inputs[0].size() > static_cast<size_t>(m_options.maxBatchSize)) {
+    if (inputs[0].size() > static_cast<size_t>(m_engineOptions.maxBatchSize)) {
         std::cout << "===== Error =====" << std::endl;
         std::cout << "The batch size is larger than the model expects!" << std::endl;
-        std::cout << "Model max batch size: " << m_options.maxBatchSize << std::endl;
+        std::cout << "Model max batch size: " << m_engineOptions.maxBatchSize << std::endl;
         std::cout << "Batch size provided to call to runInference: " << inputs[0].size() << std::endl;
         return false;
     }
@@ -394,25 +438,26 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>>& inpu
         auto* dataPointer = mfloat.ptr<void>();
 
         checkCudaErrorCode(cudaMemcpyAsync(m_buffers[i], dataPointer,
-            mfloat.cols * mfloat.rows * mfloat.channels() * sizeof(float),
-            cudaMemcpyDeviceToDevice, inferenceCudaStream));
+                                           mfloat.cols * mfloat.rows * mfloat.channels() * sizeof(float),
+                                           cudaMemcpyDeviceToDevice, inferenceCudaStream));
     }
 
     // Ensure all dynamic bindings have been defined.
+    // TODO: Should use allInputShapesSpecified()
     if (!m_context->allInputDimensionsSpecified()) {
         throw std::runtime_error("Error, not all required dimensions specified.");
     }
 
     // Set the address of the input and output buffers
     for (size_t i = 0; i < m_buffers.size(); ++i) {
-        bool status = m_context->setTensorAddress(m_IOTensorNames[i].c_str(), m_buffers[i]);
+        const bool status = m_context->setTensorAddress(m_IOTensorNames[i].c_str(), m_buffers[i]);
         if (!status) {
             return false;
         }
     }
 
     // Run inference.
-    bool status = m_context->enqueueV3(inferenceCudaStream);
+    const bool status = m_context->enqueueV3(inferenceCudaStream);
     if (!status) {
         return false;
     }
@@ -472,53 +517,6 @@ cv::cuda::GpuMat Engine::blobFromGpuMats(const std::vector<cv::cuda::GpuMat>& ba
     return mfloat;
 }
 
-std::string Engine::serializeEngineOptions(const EngineOptions& options, const std::string& onnxModelPath) {
-    const auto filenamePos = onnxModelPath.find_last_of('/') + 1;
-    std::string engineName = onnxModelPath.substr(filenamePos, onnxModelPath.find_last_of('.') - filenamePos) + ".engine";
-
-    // Add the GPU device name to the file to ensure that the model is only used on devices with the exact same GPU
-    std::vector<std::string> deviceNames;
-    getDeviceNames(deviceNames);
-
-    if (static_cast<size_t>(options.deviceIndex) >= deviceNames.size()) {
-        throw std::runtime_error("Error, provided device index is out of range!");
-    }
-
-    auto deviceName = deviceNames[options.deviceIndex];
-    // Remove spaces from the device name
-    deviceName.erase(std::remove_if(deviceName.begin(), deviceName.end(), ::isspace), deviceName.end());
-
-    engineName += "." + deviceName;
-
-    // Serialize the specified options into the filename
-    if (options.precision == Precision::FP16) {
-        engineName += ".fp16";
-    }
-    else if (options.precision == Precision::FP32) {
-        engineName += ".fp32";
-    }
-    else {
-        engineName += ".int8";
-    }
-
-    engineName += "." + std::to_string(options.maxBatchSize);
-    engineName += "." + std::to_string(options.optBatchSize);
-
-    return engineName;
-}
-
-void Engine::getDeviceNames(std::vector<std::string>& deviceNames) {
-    int numGPUs;
-    cudaGetDeviceCount(&numGPUs);
-
-    for (int device = 0; device < numGPUs; device++) {
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop, device);
-
-        deviceNames.push_back(std::string(prop.name));
-    }
-}
-
 cv::cuda::GpuMat Engine::resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat& input, size_t height, size_t width, const cv::Scalar& bgcolor) {
     float r = std::min(width / (input.cols * 1.0), height / (input.rows * 1.0));
     int unpad_w = r * input.cols;
@@ -547,19 +545,19 @@ void Engine::transformOutput(std::vector<std::vector<std::vector<float>>>& input
 }
 
 Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW, int32_t inputH,
-    const std::string& calibDataDirPath,
-    const std::string& calibTableName,
-    const std::string& inputBlobName,
-    const std::array<float, 3>& subVals,
-    const std::array<float, 3>& divVals,
-    bool normalize,
-    bool readCache)
+                                               const std::string& calibDataDirPath,
+                                               std::string calibTableName,
+                                               std::string inputBlobName,
+                                               const std::array<float, 3>& subVals,
+                                               const std::array<float, 3>& divVals,
+                                               bool normalize,
+                                               bool readCache)
     : m_batchSize(batchSize)
     , m_inputW(inputW)
     , m_inputH(inputH)
     , m_imgIdx(0)
-    , m_calibTableName(calibTableName)
-    , m_inputBlobName(inputBlobName)
+    , m_calibTableName(std::move(calibTableName))
+    , m_inputBlobName(std::move(inputBlobName))
     , m_subVals(subVals)
     , m_divVals(divVals)
     , m_normalize(normalize)
@@ -570,7 +568,8 @@ Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW
     checkCudaErrorCode(cudaMalloc(&m_deviceInput, m_inputCount * sizeof(float)));
 
     // Read the name of all the files in the specified directory.
-    if (!doesFileExist(calibDataDirPath)) {
+    if (!doseDirectoryExist(calibDataDirPath))
+    {
         throw std::runtime_error("Error, directory at provided path does not exist: " + calibDataDirPath);
     }
 

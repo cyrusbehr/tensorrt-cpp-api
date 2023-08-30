@@ -8,7 +8,7 @@ set(Sources
     ${CMAKE_CURRENT_LIST_DIR}/src/engine.cpp 
 )
 
-add_library(${Target} SHARED "")
+add_library(${Target} STATIC "")
 
 target_sources(${Target} 
 PRIVATE 
