@@ -7,45 +7,8 @@
 #include "engine.h"
 #include "NvOnnxParser.h"
 
-#if HAS_CPP_17
-#include <filesystem>
-#else
-#if defined(WIN32) || defined(_WIN32) || defined(_WIN32_) || defined(WIN64) || defined(_WIN64) || defined(_WIN64_)
-#include <direct.h>
-#include <io.h>
-#elif defined(__linux__)
-#include <unistd.h>
-#include <dirent.h>
-#endif
-#endif
-
 using namespace nvinfer1;
 using namespace EngineUtil;
-
-void EngineUtil::getFilesInDirectory(const std::string& dirPath, std::vector<std::string>& filepaths) {
-    filepaths.clear();
-#if HAS_CPP_17
-    // TODO: std::filesystem::directory_iterator will skip dot and dot-dot, but it won't skip subdirectories. This feature may lead to bugs.
-    for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
-        filepaths.emplace_back(entry.path());
-    }
-#else
-#if defined(WIN32) || defined(_WIN32) || defined(_WIN32_) || defined(WIN64) || defined(_WIN64) || defined(_WIN64_)
-    _finddata_t fileInfo;
-    const auto lf = _findfirst((dirPath + "/*").c_str(), &fileInfo);
-    while (_findnext(lf, &fileInfo) == 0) {
-        // The subdirectories are skipped.
-        // The special path names dot and dot-dot are skipped too.
-        if (fileInfo.attrib & _A_SUBDIR)
-            continue;
-        filepaths.emplace_back(dirPath + "/" + fileInfo.name);
-    }
-    _findclose(lf);
-#elif defined(__linux__)
-    // TODO: Add support for when the c++ standard is less than c++17 and the platform is Linux
-#endif
-#endif
-}
 
 void Logger::log(Severity severity, const char* msg) noexcept {
     // Would advise using a proper logging utility such as https://github.com/gabime/spdlog
@@ -584,6 +547,10 @@ Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW
     std::shuffle(std::begin(m_imgPaths), std::end(m_imgPaths), rng);
 }
 
+Int8EntropyCalibrator2::~Int8EntropyCalibrator2() {
+    checkCudaErrorCode(cudaFree(m_deviceInput));
+};
+
 int32_t Int8EntropyCalibrator2::getBatchSize() const noexcept {
     // Return the batch size
     return m_batchSize;
@@ -652,7 +619,3 @@ void Int8EntropyCalibrator2::writeCalibrationCache(const void* ptr, std::size_t 
     std::ofstream output(m_calibTableName, std::ios::binary);
     output.write(reinterpret_cast<const char*>(ptr), length);
 }
-
-Int8EntropyCalibrator2::~Int8EntropyCalibrator2() {
-    checkCudaErrorCode(cudaFree(m_deviceInput));
-};

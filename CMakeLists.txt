@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 # Since CMake3.9, CUDA support can be enabled directly
-project(tensorrt_cpp_api LANGUAGES CXX CUDA)
+project(TensorRT_CPP_API LANGUAGES CXX CUDA)
 
 # Use ccache to speed up rebuilds
 include(cmake/ccache.cmake)
@@ -31,8 +31,6 @@ endif()
 # We require OpenCV, and TensorRT
 find_package(TensorRT REQUIRED)
 find_package(OpenCV REQUIRED)
-
-set(ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 add_subdirectory(TensorRT_CPP_API)
 add_subdirectory(Benchmark)
