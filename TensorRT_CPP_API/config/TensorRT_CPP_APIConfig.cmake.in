@@ -1,3 +1,0 @@
-set(${Target}_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/include)
-set(${Target}_LINK_DIRS ${CMAKE_INSTALL_PREFIX}/lib)
-set(${Target}_LIBRARIES ${Target})
