@@ -44,14 +44,14 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - TODO: Add support for models with dynamic input shapes.
 
 ## Getting Started
-The following instructions assume you are using Ubuntu 20.04.
-You will need to supply your own onnx model for this sample code or you can download the sample model (see Sanity Check section below). 
+The following instructions assume you are using a Jetson-TX2.
+You will need to supply your own onnx model for this sample code or you can download the sample model (see Sanity Check section below).
 
 ### Jetson-TX2 Prerequisites
-- Flash the Jeston TX2 with [JetPack SDK 4.6.4](https://developer.nvidia.com/jetpack-sdk-464)
-- Install OpenCV with cuda support. To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`. 
-  - Required >= 4.8.0
-- (Optional) install [jtop](https://github.com/rbonghi/jetson_stats)
+- Flash the Jeston TX2 with [JetPack SDK 4.6.4](https://developer.nvidia.com/jetpack-sdk-464) to install [CUDA 10.2](https://docs.nvidia.com/cuda/archive/10.2/cuda-runtime-api/), [TensorRT 8.2.1](https://docs.nvidia.com/deeplearning/tensorrt/archives/tensorrt-821/) and other important libraries.
+- Install [OpenCV 4.8.0](https://docs.opencv.org/4.8.0/) with cuda support.
+  - To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`.
+- (Optional) install [jtop](https://github.com/rbonghi/jetson_stats).
 
 After installing all prerequisistes, check that all libraries are correctly installed by using `jetson_release` command. It should produce the following:
   ```bash
