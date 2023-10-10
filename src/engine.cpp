@@ -7,6 +7,7 @@
 #include <opencv2/cudaimgproc.hpp>
 #include "engine.h"
 #include "NvOnnxParser.h"
+#include <cuda_runtime.h>
 
 using namespace nvinfer1;
 using namespace Util;
