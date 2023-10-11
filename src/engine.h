@@ -7,6 +7,7 @@
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include "NvInfer.h"
+#include <cuda_runtime.h>
 
 // Utility methods
 namespace Util {
