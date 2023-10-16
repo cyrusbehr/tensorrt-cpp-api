@@ -44,24 +44,36 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - TODO: Add support for models with dynamic input shapes.
 
 ## Getting Started
-The following instructions assume you are using Ubuntu 20.04.
-You will need to supply your own onnx model for this sample code or you can download the sample model (see Sanity Check section below). 
+The following instructions assume you are using a Jetson-TX2.
+You will need to supply your own onnx model for this sample code or you can download the sample model (see Sanity Check section below).
 
-### Prerequisites
-- Tested and working on Ubuntu 20.04
-- Install CUDA, instructions [here](https://developer.nvidia.com/cuda-11-8-0-download-archive).
-  - Recommended >= 11.8 
-- Install cudnn, instructions [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#download).
-  - Recommended >= 8
-- `sudo apt install build-essential`
-- `sudo snap install cmake --classic`
-- Install OpenCV with cuda support. To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`.
-  - If you use the provided script and you have installed cuDNN to a non-standard location, you must modify the `CUDNN_INCLUDE_DIR` and `CUDNN_LIBRARY` variables in the script.  
-  - Recommended >= 4.8
-- Download TensorRT 8 from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
-  - Recommended >= 8.6
-  - Required >= 8.6 
-- Navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation.
+### Jetson-TX2 Prerequisites
+- Flash the Jeston TX2 with [JetPack SDK 4.6.4](https://developer.nvidia.com/jetpack-sdk-464) to install [CUDA 10.2](https://docs.nvidia.com/cuda/archive/10.2/cuda-runtime-api/), [TensorRT 8.2.1](https://docs.nvidia.com/deeplearning/tensorrt/archives/tensorrt-821/) and other important libraries.
+- Install [OpenCV 4.8.0](https://docs.opencv.org/4.8.0/) with cuda support.
+  - To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`.
+- (Optional) install [jtop](https://github.com/rbonghi/jetson_stats).
+
+After installing all prerequisistes, check that all libraries are correctly installed by using `jetson_release` command. It should produce the following:
+  ```bash
+  Software part of jetson-stats 4.2.3 - (c) 2023, Raffaello Bonghi
+  Model: quill - Jetpack 4.6.4 [L4T 32.7.4]
+  NV Power Mode[3]: MAXP_CORE_ARM
+  Serial Number: [XXX Show with: jetson_release -s XXX]
+  Hardware:
+  - P-Number: p3310-1000
+  - Module: NVIDIA Jetson TX2
+  Platform:
+  - Distribution: Ubuntu 18.04 Bionic Beaver
+  - Release: 4.9.337-tegra
+  Libraries:
+  - CUDA: 10.2.300
+  - cuDNN: 8.2.1.32
+  - TensorRT: 8.2
+  - VPI: 1.2.3
+  - Vulkan: 1.2.70
+  - OpenCV: 4.8.0 - with CUDA: YES
+  ```
+It is also recommended to compile and execute some samples code for OpenCV [CUDA support](https://opencv.org/platforms/cuda/), [videoio GStreamer](https://forums.developer.nvidia.com/t/onboard-opencv-camera-python-capture/144469/4) and TensorRT in `/usr/src/tensorrt/samples`.
 
 ### Building the Library
 - `mkdir build`
@@ -110,16 +122,11 @@ It is advised to use 1K+ calibration images. To enable INT8 inference with the Y
 - If you get an "out of memory in function allocate" error, then you must reduce `Options.calibrationBatchSize` so that the entire batch can fit in your GPU memory. 
 
 ### Benchmarks
-Benchmarks run on RTX 3050 Ti Laptop GPU, 11th Gen Intel(R) Core(TM) i9-11900H @ 2.50GHz.
+Benchmarks run on Jetson-TX2 p3310-1000.
 
 | Model   | Precision | Batch Size | Avg Inference Time |
 |---------|-----------|------------|--------------------|
-| yolov8n | FP32      | 1          | 4.732 ms           |
-| yolov8n | FP16      | 1          | 2.493 ms           |
-| yolov8n | INT8      | 1          | 2.009 ms           |
-| yolov8x | FP32      | 1          | 76.63 ms           |
-| yolov8x | FP16      | 1          | 25.08 ms           |
-| yolov8x | INT8      | 1          | 11.62 ms           |
+| yolov8n | FP16      | 1          | 37.258 ms          |
 
 ### Sample Integration
 Wondering how to integrate this library into your project? Or perhaps how to read the outputs of the YoloV8 model to extract meaningful information? 

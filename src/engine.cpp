@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <fstream>
-#include <filesystem>
 #include <iostream>
 #include <random>
 #include <iterator>
@@ -10,14 +9,6 @@
 
 using namespace nvinfer1;
 using namespace Util;
-
-std::vector<std::string> Util::getFilesInDirectory(const std::string& dirPath) {
-    std::vector<std::string> filepaths;
-    for (const auto& entry: std::filesystem::directory_iterator(dirPath)) {
-        filepaths.emplace_back(entry.path());
-    }
-    return filepaths;
-}
 
 void Logger::log(Severity severity, const char *msg) noexcept {
     // Would advise using a proper logging utility such as https://github.com/gabime/spdlog
@@ -247,43 +238,42 @@ bool Engine::loadNetwork() {
 
     // Storage for holding the input and output buffers
     // This will be passed to TensorRT for inference
-    m_buffers.resize(m_engine->getNbIOTensors());
+    //TODO: rollback libnvinfer API to TensorRT 8.2.1.9
+    //TODO: Needs a way to dynamically get input and output buffer size
+    int32_t nb_io_tensors = 2;
+    m_buffers.resize(nb_io_tensors);
+    // Tensor shape is (bs, chan, height, width)
+    nvinfer1::Dims4 inp_tensor_shape = {1, 3, 640, 640};
+    nvinfer1::Dims3 out_tensor_shape = {1, 84, 8400};
+    // Input and output tensor name
+    m_IOTensorNames.emplace_back("images");
+    m_IOTensorNames.emplace_back("output0");
 
+    // Allocate GPU memory for input and output buffers
     // Create a cuda stream
     cudaStream_t stream;
     checkCudaErrorCode(cudaStreamCreate(&stream));
-
-    // Allocate GPU memory for input and output buffers
+    // Define
+    // Allocate input
+    size_t input_mem_size = m_options.maxBatchSize * \
+        inp_tensor_shape.d[1] * inp_tensor_shape.d[2] * inp_tensor_shape.d[3] * sizeof(float);
+        // cudaMemcpyAsync
+    checkCudaErrorCode(cudaMallocManaged(&m_buffers[0], input_mem_size));
+    checkCudaErrorCode(cudaStreamAttachMemAsync(stream, m_buffers[0], 0, cudaMemAttachGlobal));
+    m_inputDims.emplace_back(inp_tensor_shape.d[1], inp_tensor_shape.d[2], inp_tensor_shape.d[3]);
+    // Allocate output
     m_outputLengthsFloat.clear();
-    for (int i = 0; i < m_engine->getNbIOTensors(); ++i) {
-        const auto tensorName = m_engine->getIOTensorName(i);
-        m_IOTensorNames.emplace_back(tensorName);
-        const auto tensorType = m_engine->getTensorIOMode(tensorName);
-        const auto tensorShape = m_engine->getTensorShape(tensorName);
-        if (tensorType == TensorIOMode::kINPUT) {
-            // Allocate memory for the input
-            // Allocate enough to fit the max batch size (we could end up using less later)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], m_options.maxBatchSize * tensorShape.d[1] * tensorShape.d[2] * tensorShape.d[3] * sizeof(float), stream));
-
-            // Store the input dims for later use
-            m_inputDims.emplace_back(tensorShape.d[1], tensorShape.d[2], tensorShape.d[3]);
-        } else if (tensorType == TensorIOMode::kOUTPUT) {
-            // The binding is an output
-            uint32_t outputLenFloat = 1;
-            m_outputDims.push_back(tensorShape);
-
-            for (int j = 1; j < tensorShape.nbDims; ++j) {
-                // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer
-                outputLenFloat *= tensorShape.d[j];
-            }
-
-            m_outputLengthsFloat.push_back(outputLenFloat);
-            // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
-            checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLenFloat * m_options.maxBatchSize * sizeof(float), stream));
-        } else {
-            throw std::runtime_error("Error, IO Tensor is neither an input or output!");
-        }
+    m_outputDims.push_back(out_tensor_shape);
+    uint32_t outputLenFloat = 1;
+    for (int j = 1; j < out_tensor_shape.nbDims; ++j) {
+        // We ignore j = 0 because that is the batch size, and we will take that into account when sizing the buffer
+        outputLenFloat *= out_tensor_shape.d[j];
     }
+    m_outputLengthsFloat.push_back(outputLenFloat);
+    // Now size the output buffer appropriately, taking into account the max possible batch size (although we could actually end up using less memory)
+    size_t output_mem_size = m_options.maxBatchSize * outputLenFloat * sizeof(float);
+    checkCudaErrorCode(cudaMallocManaged(&m_buffers[1], output_mem_size));
+    checkCudaErrorCode(cudaStreamAttachMemAsync(stream, m_buffers[1], 0, cudaMemAttachGlobal));
 
     // Synchronize and destroy the cuda stream
     checkCudaErrorCode(cudaStreamSynchronize(stream));
@@ -349,7 +339,8 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         }
 
         nvinfer1::Dims4 inputDims = {batchSize, dims.d[0], dims.d[1], dims.d[2]};
-        m_context->setInputShape(m_IOTensorNames[i].c_str(), inputDims); // Define the batch size
+        int32_t input_idx = m_engine->getBindingIndex(m_IOTensorNames[i].c_str());
+        m_context->setBindingDimensions(input_idx, inputDims);
 
         // OpenCV reads images into memory in NHWC format, while TensorRT expects images in NCHW format. 
         // The following method converts NHWC to NCHW.
@@ -369,16 +360,9 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         throw std::runtime_error("Error, not all required dimensions specified.");
     }
 
-    // Set the address of the input and output buffers
-    for (size_t i = 0; i < m_buffers.size(); ++i) {
-        bool status = m_context->setTensorAddress(m_IOTensorNames[i].c_str(), m_buffers[i]);
-        if (!status) {
-            return false;
-        }
-    }
-
     // Run inference.
-    bool status = m_context->enqueueV3(inferenceCudaStream);
+    void* bindings[] = {m_buffers[0], m_buffers[1]};
+    bool status = m_context->enqueueV2(bindings, inferenceCudaStream, nullptr);
     if (!status) {
         return false;
     }
@@ -537,14 +521,13 @@ Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW
         throw std::runtime_error("Error, directory at provided path does not exist: " + calibDataDirPath);
     }
 
-    m_imgPaths = getFilesInDirectory(calibDataDirPath);
+    m_imgPaths.push_back("");
     if (m_imgPaths.size() < static_cast<size_t>(batchSize)) {
         throw std::runtime_error("There are fewer calibration images than the specified batch size!");
     }
 
     // Randomize the calibration data
-    auto rd = std::random_device {};
-    auto rng = std::default_random_engine { rd() };
+    auto rng = std::default_random_engine { };
     std::shuffle(std::begin(m_imgPaths), std::end(m_imgPaths), rng);
 }
 
