@@ -42,6 +42,7 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - The code can be used as a base for any model which takes a fixed size image / images as input, including [Insightface](https://github.com/deepinsight/insightface) [ArcFace](https://github.com/onnx/models/tree/main/vision/body_analysis/arcface), [YoloV8](https://github.com/ultralytics/ultralytics), [SCRFD](https://insightface.ai/scrfd) face detection.
   - You will just need to implement the appropriate post-processing code.
 - TODO: Add support for models with dynamic input shapes.
+- TODO: Add support for Windows
 
 ## Getting Started
 The following instructions assume you are using Ubuntu 20.04.
