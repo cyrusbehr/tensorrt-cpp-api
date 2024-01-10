@@ -31,7 +31,6 @@ int main(int argc, char *argv[]) {
     options.precision = Precision::FP16;
     // If using INT8 precision, must specify path to directory containing calibration data.
     options.calibrationDataDirectoryPath = "";
-    // If the model does not support dynamic batch size, then the below two parameters must be set to 1.
     // Specify the batch size to optimize for.
     options.optBatchSize = 1;
     // Specify the maximum batch size we plan on running.

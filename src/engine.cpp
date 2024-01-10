@@ -104,17 +104,17 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
     }
 
     // Check to see if the model supports dynamic batch size or not
+    bool doesSupportDynamicBatch = false;
     if (input0Batch == -1) {
+        doesSupportDynamicBatch = true;
         std::cout << "Model supports dynamic batch size" << std::endl;
-    } else if (input0Batch == 1) {
-        std::cout << "Model only supports fixed batch size of 1" << std::endl;
+    } else {
+        std::cout << "Model only supports fixed batch size of " << input0Batch << std::endl;
         // If the model supports a fixed batch size, ensure that the maxBatchSize and optBatchSize were set correctly.
         if (m_options.optBatchSize != input0Batch || m_options.maxBatchSize != input0Batch) {
-            throw std::runtime_error("Error, model only supports a fixed batch size of 1. Must set Options.optBatchSize and Options.maxBatchSize to 1");
+            throw std::runtime_error("Error, model only supports a fixed batch size of " + std::to_string(input0Batch) +
+            ". Must set Options.optBatchSize and Options.maxBatchSize to 1");
         }
-    } else {
-        throw std::runtime_error("Implementation currently only supports dynamic batch sizes or a fixed batch size of 1 (your batch size is fixed to "
-        + std::to_string(input0Batch) + ")");
     }
 
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
@@ -134,7 +134,11 @@ bool Engine::build(std::string onnxModelPath, const std::array<float, 3>& subVal
         int32_t inputW = inputDims.d[3];
 
         // Specify the optimization profile`
-        optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+        if (doesSupportDynamicBatch) {
+            optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(1, inputC, inputH, inputW));
+        } else {
+            optProfile->setDimensions(inputName, OptProfileSelector::kMIN, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
+        }
         optProfile->setDimensions(inputName, OptProfileSelector::kOPT, Dims4(m_options.optBatchSize, inputC, inputH, inputW));
         optProfile->setDimensions(inputName, OptProfileSelector::kMAX, Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
     }
@@ -267,6 +271,7 @@ bool Engine::loadNetwork() {
 
             // Store the input dims for later use
             m_inputDims.emplace_back(tensorShape.d[1], tensorShape.d[2], tensorShape.d[3]);
+            m_inputBatchSize = tensorShape.d[0];
         } else if (tensorType == TensorIOMode::kOUTPUT) {
             // The binding is an output
             uint32_t outputLenFloat = 1;
@@ -312,6 +317,15 @@ bool Engine::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inpu
         std::cout << "===== Error =====" << std::endl;
         std::cout << "The batch size is larger than the model expects!" << std::endl;
         std::cout << "Model max batch size: " << m_options.maxBatchSize << std::endl;
+        std::cout << "Batch size provided to call to runInference: " << inputs[0].size() << std::endl;
+        return false;
+    }
+
+    // Ensure that if the model has a fixed batch size that is greater than 1, the input has the correct length
+    if (m_inputBatchSize != -1 && inputs[0].size() != static_cast<size_t>(m_inputBatchSize)) {
+        std::cout << "===== Error =====" << std::endl;
+        std::cout << "The batch size is different from what the model expects!" << std::endl;
+        std::cout << "Model batch size: " << m_inputBatchSize << std::endl;
         std::cout << "Batch size provided to call to runInference: " << inputs[0].size() << std::endl;
         return false;
     }
