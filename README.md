@@ -159,6 +159,10 @@ If this project was helpful to you, I would appreciate if you could give it a st
 
 ### Changelog
 
+**V4.1**
+
+- Added support for fixed batch size > 1.  
+
 **V4.0**
 
 - Added support for INT8 precision.
