@@ -127,6 +127,8 @@ Benchmarks run on Jetson-TX2 p3310-1000.
 | Model   | Precision | Batch Size | Avg Inference Time |
 |---------|-----------|------------|--------------------|
 | yolov8n | FP16      | 1          | 37.258 ms          |
+| yolov8m | FP16      | 1          | 123.685 ms         |
+| yolov8x | FP16      | 1          | 297.166 ms         |
 
 ### Sample Integration
 Wondering how to integrate this library into your project? Or perhaps how to read the outputs of the YoloV8 model to extract meaningful information? 
