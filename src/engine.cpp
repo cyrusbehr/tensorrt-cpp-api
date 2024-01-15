@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <fstream>
+#include <experimental/filesystem>
 #include <iostream>
 #include <random>
 #include <iterator>
@@ -9,6 +10,14 @@
 
 using namespace nvinfer1;
 using namespace Util;
+
+std::vector<std::string> Util::getFilesInDirectory(const std::string& dirPath) {
+    std::vector<std::string> filepaths;
+    for (const auto& entry: std::experimental::filesystem::directory_iterator(dirPath)) {
+        filepaths.emplace_back(entry.path());
+    }
+    return filepaths;
+}
 
 void Logger::log(Severity severity, const char *msg) noexcept {
     // Would advise using a proper logging utility such as https://github.com/gabime/spdlog
@@ -521,7 +530,7 @@ Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW
         throw std::runtime_error("Error, directory at provided path does not exist: " + calibDataDirPath);
     }
 
-    m_imgPaths.push_back("");
+    m_imgPaths = getFilesInDirectory(calibDataDirPath);
     if (m_imgPaths.size() < static_cast<size_t>(batchSize)) {
         throw std::runtime_error("There are fewer calibration images than the specified batch size!");
     }

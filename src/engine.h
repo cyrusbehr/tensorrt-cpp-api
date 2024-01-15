@@ -22,6 +22,8 @@ namespace Util {
             throw std::runtime_error(errMsg);
         }
     }
+
+    std::vector<std::string> getFilesInDirectory(const std::string& dirPath);
 }
 // Utility Timer
 template <typename Clock = std::chrono::high_resolution_clock>
