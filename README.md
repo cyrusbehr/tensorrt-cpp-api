@@ -32,7 +32,7 @@
 *I read all the NVIDIA TensorRT docs so that you don't have to!*
 
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference on image data. It covers how to do the following:
-- How to install TensorRT 8 on Ubuntu 20.04.
+- How to install TensorRT 8 on Ubuntu 20.04 / 22.04.
 - How to generate a TensorRT engine file optimized for your GPU.
 - How to specify a simple optimization profile.
 - How to run FP32, FP16, or INT8 precision inference. 
@@ -48,22 +48,24 @@ This project demonstrates how to use the TensorRT C++ API for high performance G
 - TODO: Add support for Windows
 
 ## Getting Started
-The following instructions assume you are using Ubuntu 20.04.
+The following instructions assume you are using Ubuntu 20.04 or 22.04.
 You will need to supply your own onnx model for this sample code or you can download the sample model (see Sanity Check section below). 
 
 ### Prerequisites
-- Tested and working on Ubuntu 20.04
-- Install CUDA, instructions [here](https://developer.nvidia.com/cuda-11-8-0-download-archive).
-  - Recommended >= 11.8 
+- Tested and working on Ubuntu 20.04 and 22.04
+- Install CUDA 11 or 12, instructions [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
+  - Recommended >= 11.8
+  - Required >= 11.0
+  - Required <= 12.1 (TensorRT only supports up to 12.1)
 - Install cudnn, instructions [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#download).
-  - Recommended >= 8
+  - Required >= 8
+  - Required < 9 (OpenCV GPU does not yet support)
 - `sudo apt install build-essential`
 - `sudo snap install cmake --classic`
 - Install OpenCV with cuda support. To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`.
   - If you use the provided script and you have installed cuDNN to a non-standard location, you must modify the `CUDNN_INCLUDE_DIR` and `CUDNN_LIBRARY` variables in the script.  
   - Recommended >= 4.8
 - Download TensorRT 8 from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
-  - Recommended >= 8.6
   - Required >= 8.6 
 - Navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation.
 
