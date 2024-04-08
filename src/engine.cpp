@@ -264,6 +264,12 @@ bool Engine::loadNetwork() {
         m_IOTensorNames.emplace_back(tensorName);
         const auto tensorType = m_engine->getTensorIOMode(tensorName);
         const auto tensorShape = m_engine->getTensorShape(tensorName);
+
+        // The implementation currently only works with float inputs and outputs
+        if (m_engine->getTensorDataType(tensorName) != DataType::kFLOAT) {
+            throw std::runtime_error("Error, the implementation currently only supports float inputs and outputs");
+        }
+
         if (tensorType == TensorIOMode::kINPUT) {
             // Allocate memory for the input
             // Allocate enough to fit the max batch size (we could end up using less later)
