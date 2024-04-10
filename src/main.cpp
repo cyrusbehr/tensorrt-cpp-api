@@ -1,26 +1,14 @@
+#include "cmd_line_parser.h"
 #include "engine.h"
-#include <opencv2/opencv.hpp>
-#include <opencv2/cudaimgproc.hpp>
 #include <chrono>
+#include <opencv2/cudaimgproc.hpp>
+#include <opencv2/opencv.hpp>
 
 int main(int argc, char *argv[]) {
+    CommandLineArguments arguments;
+
     // Parse the command line arguments
-    // Must pass the model path as a command line argument to the executable
-    if (argc < 2) {
-        std::cout << "Error: Must specify the model path" << std::endl;
-        std::cout << "Usage: " << argv[0] << " /path/to/onnx/model.onnx" << std::endl;
-        return -1;
-    }
-
-    if (argc > 3) {
-        std::cout << "Error: Too many arguments provided" << std::endl;
-        std::cout << "Usage: " << argv[0] << " /path/to/onnx/model.onnx" << std::endl;
-    }
-
-    // Ensure the onnx model exists
-    const std::string onnxModelPath = argv[1];
-    if (!Util::doesFileExist(onnxModelPath)) {
-        std::cout << "Error: Unable to find file at path: " << onnxModelPath << std::endl;
+    if (!parseArguments(argc, argv, arguments)) {
         return -1;
     }
 
@@ -29,40 +17,47 @@ int main(int argc, char *argv[]) {
     // Specify what precision to use for inference
     // FP16 is approximately twice as fast as FP32.
     options.precision = Precision::FP16;
-    // If using INT8 precision, must specify path to directory containing calibration data.
+    // If using INT8 precision, must specify path to directory containing
+    // calibration data.
     options.calibrationDataDirectoryPath = "";
     // Specify the batch size to optimize for.
     options.optBatchSize = 1;
     // Specify the maximum batch size we plan on running.
     options.maxBatchSize = 1;
 
-    Engine engine(options);
+    Engine<float> engine(options);
 
     // Define our preprocessing code
     // The default Engine::build method will normalize values between [0.f, 1.f]
-    // Setting the normalize flag to false will leave values between [0.f, 255.f] (some converted models may require this).
+    // Setting the normalize flag to false will leave values between [0.f, 255.f]
+    // (some converted models may require this).
 
-    // For our YoloV8 model, we need the values to be normalized between [0.f, 1.f] so we use the following params
-    std::array<float, 3> subVals {0.f, 0.f, 0.f};
-    std::array<float, 3> divVals {1.f, 1.f, 1.f};
+    // For our YoloV8 model, we need the values to be normalized between
+    // [0.f, 1.f] so we use the following params
+    std::array<float, 3> subVals{0.f, 0.f, 0.f};
+    std::array<float, 3> divVals{1.f, 1.f, 1.f};
     bool normalize = true;
     // Note, we could have also used the default values.
 
-    // If the model requires values to be normalized between [-1.f, 1.f], use the following params:
+    // If the model requires values to be normalized between [-1.f, 1.f], use the
+    // following params:
     //    subVals = {0.5f, 0.5f, 0.5f};
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
-    
-    // Build the onnx model into a TensorRT engine file.
-    bool succ = engine.build(onnxModelPath, subVals, divVals, normalize);
-    if (!succ) {
-        throw std::runtime_error("Unable to build TRT engine.");
-    }
 
-    // Load the TensorRT engine file from disk
-    succ = engine.loadNetwork();
-    if (!succ) {
-        throw std::runtime_error("Unable to load TRT engine.");
+    if (!arguments.onnxModelPath.empty()) {
+        // Build the onnx model into a TensorRT engine file, and load the TensorRT
+        // engine file into memory.
+        bool succ = engine.buildLoadNetwork(arguments.onnxModelPath, subVals, divVals, normalize);
+        if (!succ) {
+            throw std::runtime_error("Unable to build or load TensorRT engine.");
+        }
+    } else {
+        // Load the TensorRT engine file directly
+        bool succ = engine.loadNetwork(arguments.trtModelPath, subVals, divVals, normalize);
+        if (!succ) {
+            throw std::runtime_error("Unable to load TensorRT engine.");
+        }
     }
 
     // Read the input image
@@ -80,25 +75,33 @@ int main(int argc, char *argv[]) {
     // The model expects RGB input
     cv::cuda::cvtColor(img, img, cv::COLOR_BGR2RGB);
 
-    // In the following section we populate the input vectors to later pass for inference
-    const auto& inputDims = engine.getInputDims();
+    // In the following section we populate the input vectors to later pass for
+    // inference
+    const auto &inputDims = engine.getInputDims();
     std::vector<std::vector<cv::cuda::GpuMat>> inputs;
 
-    // Let's use a batch size which matches that which we set the Options.optBatchSize option
+    // Let's use a batch size which matches that which we set the
+    // Options.optBatchSize option
     size_t batchSize = options.optBatchSize;
 
     // TODO:
-    // For the sake of the demo, we will be feeding the same image to all the inputs
-    // You should populate your inputs appropriately.
-    for (const auto & inputDim : inputDims) { // For each of the model inputs...
+    // For the sake of the demo, we will be feeding the same image to all the
+    // inputs You should populate your inputs appropriately.
+    for (const auto &inputDim : inputDims) { // For each of the model inputs...
         std::vector<cv::cuda::GpuMat> input;
         for (size_t j = 0; j < batchSize; ++j) { // For each element we want to add to the batch...
             // TODO:
-            // You can choose to resize by scaling, adding padding, or a combination of the two in order to maintain the aspect ratio
-            // You can use the Engine::resizeKeepAspectRatioPadRightBottom to resize to a square while maintain the aspect ratio (adds padding where necessary to achieve this).
-            auto resized = Engine::resizeKeepAspectRatioPadRightBottom(img, inputDim.d[1], inputDim.d[2]);
-            // You could also perform a resize operation without maintaining aspect ratio with the use of padding by using the following instead:
-//            cv::cuda::resize(img, resized, cv::Size(inputDim.d[2], inputDim.d[1])); // TRT dims are (height, width) whereas OpenCV is (width, height)
+            // You can choose to resize by scaling, adding padding, or a combination
+            // of the two in order to maintain the aspect ratio You can use the
+            // Engine::resizeKeepAspectRatioPadRightBottom to resize to a square while
+            // maintain the aspect ratio (adds padding where necessary to achieve
+            // this).
+            auto resized = Engine<float>::resizeKeepAspectRatioPadRightBottom(img, inputDim.d[1], inputDim.d[2]);
+            // You could also perform a resize operation without maintaining aspect
+            // ratio with the use of padding by using the following instead:
+            //            cv::cuda::resize(img, resized, cv::Size(inputDim.d[2],
+            //            inputDim.d[1])); // TRT dims are (height, width) whereas
+            //            OpenCV is (width, height)
             input.emplace_back(std::move(resized));
         }
         inputs.emplace_back(std::move(input));
@@ -108,7 +111,7 @@ int main(int argc, char *argv[]) {
     std::cout << "\nWarming up the network..." << std::endl;
     std::vector<std::vector<std::vector<float>>> featureVectors;
     for (int i = 0; i < 100; ++i) {
-        succ = engine.runInference(inputs, featureVectors);
+        bool succ = engine.runInference(inputs, featureVectors);
         if (!succ) {
             throw std::runtime_error("Unable to run inference.");
         }
@@ -138,9 +141,10 @@ int main(int argc, char *argv[]) {
     // Print the feature vectors
     for (size_t batch = 0; batch < featureVectors.size(); ++batch) {
         for (size_t outputNum = 0; outputNum < featureVectors[batch].size(); ++outputNum) {
-            std::cout << "Batch " << batch << ", " << "output " << outputNum << std::endl;
+            std::cout << "Batch " << batch << ", "
+                      << "output " << outputNum << std::endl;
             int i = 0;
-            for (const auto &e:  featureVectors[batch][outputNum]) {
+            for (const auto &e : featureVectors[batch][outputNum]) {
                 std::cout << e << " ";
                 if (++i == 10) {
                     std::cout << "...";
@@ -151,7 +155,8 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // TODO: If your model requires post processing (ex. convert feature vector into bounding boxes) then you would do so here.
+    // TODO: If your model requires post processing (ex. convert feature vector
+    // into bounding boxes) then you would do so here.
 
     return 0;
 }

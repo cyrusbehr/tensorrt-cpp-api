@@ -35,5 +35,7 @@
 build*/
 cmake-build-*
 .idea/
+.vscode/
 
 *.onnx
+

@@ -78,9 +78,12 @@ You will need to supply your own onnx model for this sample code or you can down
 ### Running the Executable
 - Navigate to the build directory
 - Run the executable and provide the path to your onnx model.
-- ex. `./run_inference_benchmark ../models/yolov8n.onnx`
+- ex. `./run_inference_benchmark --onnx_model ../models/yolov8n.onnx`
   - Note: See sanity check section below for instructions on how to obtain the yolov8n model.  
 - The first time you run the executable for a given model and options, a TensorRT engine file will be built from your onnx model. This process is fairly slow and can take 5+ minutes for some models (ex. yolo models). 
+- Alternatively, you can choose to supply your own TensorRT engine file directly:
+- ex. `./run_inference_benchmark --trt_model ../models/yolov8n.engine.NVIDIAGeForceRTX3080LaptopGPU.fp16.1.1`
+  - Note: See V5.0 changelog below for warnings when supply your own TensorRT engine file. 
 
 ### Sanity Check
 - To perform a sanity check, download the `YOLOv8n` model from [here](https://github.com/ultralytics/ultralytics#models).
@@ -160,6 +163,12 @@ If this project was helpful to you, I would appreciate if you could give it a st
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ### Changelog
+
+**V5.0**
+
+- `Engine` class has been modified to take a template parameter which specifies the models output data type. The implementation now supports outputs of type `float`, ``__half`, `int8_t`, `int32_t`, `bool`, and `uint8_t`. 
+- Added support for loading TensorRT engine file directly without needing to compile from onnx model. Howver, it is highly recommended that you use the API provided to build the engine file from the onnx model, instead of loading a TensorRT model directly. If you choose to load a TensorRT model file directly, you must hand-check that the `Options` have been set correctly for your model (for example, if your model has been compiled for FP32 but you try running FP16 inference, it will fail, potentially without a verbose error).
+- Added command line parser. 
 
 **V4.1**
 
