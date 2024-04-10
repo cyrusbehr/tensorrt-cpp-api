@@ -251,6 +251,8 @@ bool Engine<T>::loadNetwork(std::string trtModelPath, const std::array<float, 3>
     if (!Util::doesFileExist(trtModelPath)) {
         std::cout << "Error, unable to read TensorRT model at path: " + trtModelPath << std::endl;
         return false;
+    } else {
+        std::cout << "Loading TensorRT engine file at path: " << trtModelPath << std::endl;
     }
 
     std::ifstream file(trtModelPath, std::ios::binary | std::ios::ate);
