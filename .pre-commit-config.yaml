@@ -1,0 +1,6 @@
+repos:
+- repo: https://github.com/pre-commit/mirrors-clang-format
+  rev: 'v17.0.3'  # Use the sha / tag you want to point at
+  hooks:
+  - id: clang-format
+    types_or: [c++, c, cuda]
