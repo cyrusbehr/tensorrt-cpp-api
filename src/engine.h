@@ -449,18 +449,18 @@ bool Engine<T>::loadNetwork() {
         } else if (tensorType == nvinfer1::TensorIOMode::kOUTPUT) {
             // Ensure the model output data type matches the template argument specified by the user
             if (tensorDataType == nvinfer1::DataType::kFLOAT && !std::is_same<float, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type float. Engine clsas template parameter must be adjusted.");
+                throw std::runtime_error("Error, the model has expected output of type float. Engine class template parameter must be adjusted.");
             } else if (tensorDataType == nvinfer1::DataType::kHALF && !std::is_same<__half, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type __half. Engine clsas template parameter must be adjusted.");
+                throw std::runtime_error("Error, the model has expected output of type __half. Engine class template parameter must be adjusted.");
             } else if (tensorDataType == nvinfer1::DataType::kINT8 && !std::is_same<int8_t, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type int8_t. Engine clsas template parameter must be adjusted.");
+                throw std::runtime_error("Error, the model has expected output of type int8_t. Engine class template parameter must be adjusted.");
             } else if (tensorDataType == nvinfer1::DataType::kINT32 && !std::is_same<int32_t, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type int32_t. Engine clsas template parameter must be adjusted.");
+                throw std::runtime_error("Error, the model has expected output of type int32_t. Engine class template parameter must be adjusted.");
             } else if (tensorDataType == nvinfer1::DataType::kBOOL && !std::is_same<bool, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type bool. Engine clsas template parameter must be adjusted.");
+                throw std::runtime_error("Error, the model has expected output of type bool. Engine class template parameter must be adjusted.");
             } else if (tensorDataType == nvinfer1::DataType::kUINT8 && !std::is_same<uint8_t, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type uint8_t. Engine clsas template parameter must be adjusted.");
-            } else {
+                throw std::runtime_error("Error, the model has expected output of type uint8_t. Engine class template parameter must be adjusted.");
+            } else if (tensorDataType == nvinfer1::DataType::kFP8){
                 throw std::runtime_error("Error, model has unsupported output type");
             }
 
