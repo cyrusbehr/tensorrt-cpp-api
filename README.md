@@ -161,6 +161,10 @@ If this project was helpful to you, I would appreciate if you could give it a st
 
 ### Changelog
 
+**V5**
+
+- `Engine` class has been modified to take a template parameter which specifies the models output data type. The implementation now supports outputs of type `float`, ``__half`, `int8_t`, `int32_t`, `bool`, and `uint8_t`. 
+
 **V4.1**
 
 - Added support for fixed batch size > 1.  
