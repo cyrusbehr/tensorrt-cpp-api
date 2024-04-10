@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
     // Specify the maximum batch size we plan on running.
     options.maxBatchSize = 1;
 
-    Engine engine(options);
+    Engine<float> engine(options);
 
     // Define our preprocessing code
     // The default Engine::build method will normalize values between [0.f, 1.f]
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
             // TODO:
             // You can choose to resize by scaling, adding padding, or a combination of the two in order to maintain the aspect ratio
             // You can use the Engine::resizeKeepAspectRatioPadRightBottom to resize to a square while maintain the aspect ratio (adds padding where necessary to achieve this).
-            auto resized = Engine::resizeKeepAspectRatioPadRightBottom(img, inputDim.d[1], inputDim.d[2]);
+            auto resized = Engine<float>::resizeKeepAspectRatioPadRightBottom(img, inputDim.d[1], inputDim.d[2]);
             // You could also perform a resize operation without maintaining aspect ratio with the use of padding by using the following instead:
 //            cv::cuda::resize(img, resized, cv::Size(inputDim.d[2], inputDim.d[1])); // TRT dims are (height, width) whereas OpenCV is (width, height)
             input.emplace_back(std::move(resized));
