@@ -53,16 +53,10 @@ int main(int argc, char *argv[]) {
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
     
-    // Build the onnx model into a TensorRT engine file.
-    bool succ = engine.build(onnxModelPath, subVals, divVals, normalize);
+    // Build the onnx model into a TensorRT engine file, and load the TensorRT engine file into memory. 
+    bool succ = engine.buildLoadNetwork(onnxModelPath, subVals, divVals, normalize);
     if (!succ) {
-        throw std::runtime_error("Unable to build TRT engine.");
-    }
-
-    // Load the TensorRT engine file from disk
-    succ = engine.loadNetwork();
-    if (!succ) {
-        throw std::runtime_error("Unable to load TRT engine.");
+        throw std::runtime_error("Unable to build or load TRT engine.");
     }
 
     // Read the input image

@@ -164,6 +164,7 @@ If this project was helpful to you, I would appreciate if you could give it a st
 **V5**
 
 - `Engine` class has been modified to take a template parameter which specifies the models output data type. The implementation now supports outputs of type `float`, ``__half`, `int8_t`, `int32_t`, `bool`, and `uint8_t`. 
+- Added support for loading TensorRT engine file directly without needing to compile from onnx model. Howver, it is highly recommended that you use the API provided to build the engine file from the onnx model, instead of loading a TensorRT model directly. If you choose to load a TensorRT model file directly, you must hand-check that the `Options` have been set correctly for your model (for example, if your model has been compiled for FP32 but you try running FP16 inference, it will fail, potentially without a verbose error).
 
 **V4.1**
 
