@@ -2,26 +2,14 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/cudaimgproc.hpp>
 #include <chrono>
+#include "cmd_line_parser.h"
 
 int main(int argc, char *argv[]) {
+    CommandLineArguments arguments;
+
     // Parse the command line arguments
-    // Must pass the model path as a command line argument to the executable
-    if (argc < 2) {
-        std::cout << "Error: Must specify the model path" << std::endl;
-        std::cout << "Usage: " << argv[0] << " /path/to/onnx/model.onnx" << std::endl;
-        return -1;
-    }
-
-    if (argc > 3) {
-        std::cout << "Error: Too many arguments provided" << std::endl;
-        std::cout << "Usage: " << argv[0] << " /path/to/onnx/model.onnx" << std::endl;
-    }
-
-    // Ensure the onnx model exists
-    const std::string onnxModelPath = argv[1];
-    if (!Util::doesFileExist(onnxModelPath)) {
-        std::cout << "Error: Unable to find file at path: " << onnxModelPath << std::endl;
-        return -1;
+	if (!parseArguments(argc, argv, arguments)) {
+		return -1;
     }
 
     // Specify our GPU inference configuration options
@@ -53,10 +41,18 @@ int main(int argc, char *argv[]) {
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
     
-    // Build the onnx model into a TensorRT engine file, and load the TensorRT engine file into memory. 
-    bool succ = engine.buildLoadNetwork(onnxModelPath, subVals, divVals, normalize);
-    if (!succ) {
-        throw std::runtime_error("Unable to build or load TRT engine.");
+    if (!arguments.onnxModelPath.empty()) {
+        // Build the onnx model into a TensorRT engine file, and load the TensorRT engine file into memory. 
+        bool succ = engine.buildLoadNetwork(arguments.onnxModelPath, subVals, divVals, normalize);
+        if (!succ) {
+            throw std::runtime_error("Unable to build or load TensorRT engine.");
+        }
+    } else {
+        // Load the TensorRT engine file directly
+        bool succ = engine.loadNetwork(arguments.trtModelPath, subVals, divVals, normalize);
+        if (!succ) {
+            throw std::runtime_error("Unable to load TensorRT engine.");
+        }
     }
 
     // Read the input image
@@ -102,7 +98,7 @@ int main(int argc, char *argv[]) {
     std::cout << "\nWarming up the network..." << std::endl;
     std::vector<std::vector<std::vector<float>>> featureVectors;
     for (int i = 0; i < 100; ++i) {
-        succ = engine.runInference(inputs, featureVectors);
+        bool succ = engine.runInference(inputs, featureVectors);
         if (!succ) {
             throw std::runtime_error("Unable to run inference.");
         }
