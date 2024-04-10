@@ -218,13 +218,13 @@ template <typename T>
 bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<float, 3>& subVals, const std::array<float, 3>& divVals, bool normalize) {
     // Only regenerate the engine file if it has not already been generated for the specified options, otherwise load cached version from disk
     const auto engineName = serializeEngineOptions(m_options, onnxModelPath);
-    std::cout << "Searching for engine file with name: " << onnxModelPath << std::endl;
+    std::cout << "Searching for engine file with name: " << engineName << std::endl;
 
     if (Util::doesFileExist(engineName)) {
         std::cout << "Engine found, not regenerating..." << std::endl;
     } else {
         if (!Util::doesFileExist(onnxModelPath)) {
-            throw std::runtime_error("Could not find model at path: " + onnxModelPath);
+            throw std::runtime_error("Could not find onnx model at path: " + onnxModelPath);
         }
 
         // Was not able to find the engine file, generate...
