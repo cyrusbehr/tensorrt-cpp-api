@@ -53,10 +53,9 @@ You will need to supply your own onnx model for this sample code or you can down
 
 ### Prerequisites
 - Tested and working on Ubuntu 20.04 and 22.04
-- Install CUDA 11 or 12, instructions [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
-  - Recommended >= 11.8
+- Install CUDA 11 or 12, instructions [here](https://developer.nvidia.com/cuda-downloads).
+  - Recommended >= 12.0
   - Required >= 11.0
-  - Required <= 12.1 (TensorRT only supports up to 12.1)
 - Install cudnn, instructions [here](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#download).
   - Required >= 8
   - Required < 9 (OpenCV GPU does not yet support)
@@ -65,8 +64,8 @@ You will need to supply your own onnx model for this sample code or you can down
 - Install OpenCV with cuda support. To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`.
   - If you use the provided script and you have installed cuDNN to a non-standard location, you must modify the `CUDNN_INCLUDE_DIR` and `CUDNN_LIBRARY` variables in the script.  
   - Recommended >= 4.8
-- Download TensorRT 8 from [here](https://developer.nvidia.com/nvidia-tensorrt-8x-download).
-  - Required >= 8.6 
+- Download TensorRT 10 from [here](https://developer.nvidia.com/tensorrt/download/10x).
+  - Required >= 10.0 
 - Navigate to the `CMakeLists.txt` file and replace the `TODO` with the path to your TensorRT installation.
 
 ### Building the Library
@@ -163,6 +162,10 @@ If this project was helpful to you, I would appreciate if you could give it a st
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ### Changelog
+
+**V6.0**
+
+- Now requires TensorRT >= 10.0.
 
 **V5.0**
 
