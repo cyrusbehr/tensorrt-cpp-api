@@ -215,7 +215,7 @@ template <typename T> void Engine<T>::clearGpuBuffers() {
     if (!m_buffers.empty()) {
         // Free GPU memory of outputs
         const auto numInputs = m_inputDims.size();
-        for (int32_t outputBinding = numInputs; outputBinding < m_engine->getNbBindings(); ++outputBinding) {
+        for (int32_t outputBinding = numInputs; outputBinding < m_engine->getNbIOTensors(); ++outputBinding) {
             Util::checkCudaErrorCode(cudaFree(m_buffers[outputBinding]));
         }
         m_buffers.clear();
@@ -659,7 +659,7 @@ bool Engine<T>::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &i
     for (int batch = 0; batch < batchSize; ++batch) {
         // Batch
         std::vector<std::vector<T>> batchOutputs{};
-        for (int32_t outputBinding = numInputs; outputBinding < m_engine->getNbBindings(); ++outputBinding) {
+        for (int32_t outputBinding = numInputs; outputBinding < m_engine->getNbIOTensors(); ++outputBinding) {
             // We start at index m_inputDims.size() to account for the inputs in our
             // m_buffers
             std::vector<T> output;
