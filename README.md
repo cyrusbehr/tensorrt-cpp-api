@@ -32,7 +32,7 @@
 *I read all the NVIDIA TensorRT docs so that you don't have to!*
 
 This project demonstrates how to use the TensorRT C++ API for high performance GPU inference on image data. It covers how to do the following:
-- How to install TensorRT 8 on Ubuntu 20.04 / 22.04.
+- How to install TensorRT 10 on Ubuntu 20.04 / 22.04.
 - How to generate a TensorRT engine file optimized for your GPU.
 - How to specify a simple optimization profile.
 - How to run FP32, FP16, or INT8 precision inference. 
@@ -165,7 +165,7 @@ If this project was helpful to you, I would appreciate if you could give it a st
 
 **V6.0**
 
-- Now requires TensorRT >= 10.0.
+- Implementation now requires TensorRT >= 10.0.
 
 **V5.0**
 
