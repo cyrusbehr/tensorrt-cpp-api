@@ -131,7 +131,7 @@ Benchmarks run on RTX 3050 Ti Laptop GPU, 11th Gen Intel(R) Core(TM) i9-11900H @
 
 ### Sample Integration
 Wondering how to integrate this library into your project? Or perhaps how to read the outputs of the YoloV8 model to extract meaningful information? 
-If so, check out my newest project, [YOLOv8-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP), which demonstrates how to use the TensorRT C++ API to run YoloV8 inference (supports object detection, semantic segmentation, and body pose estimation). It makes use of this project in the backend!
+If so, check out my two latest projects, [YOLOv8-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv8-TensorRT-CPP) and [YOLOv9-TensorRT-CPP](https://github.com/cyrusbehr/YOLOv9-TensorRT-CPP), which demonstrate how to use the TensorRT C++ API to run YoloV8/9 inference (supports object detection, semantic segmentation, and body pose estimation). They make use of this project in the backend!
 
 ### Understanding the Code
 - The bulk of the implementation is in `src/engine.cpp`. I have written lots of comments all throughout the code which should make it easy to understand what is going on. 
