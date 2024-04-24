@@ -52,7 +52,7 @@ The following instructions assume you are using Ubuntu 20.04 or 22.04.
 You will need to supply your own onnx model for this sample code or you can download the sample model (see Sanity Check section below). 
 
 ### Prerequisites
-- Tested and working on Ubuntu 20.04 and 22.04
+- Tested and working on Ubuntu 20.04 and 22.04 (Windows is **not** supported at this time)
 - Install CUDA 11 or 12, instructions [here](https://developer.nvidia.com/cuda-downloads).
   - Recommended >= 12.0
   - Required >= 11.0
