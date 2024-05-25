@@ -81,7 +81,7 @@ bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32
 
         cv::cuda::GpuMat gpuImg;
         gpuImg.upload(cpuImg);
-        cv::cuda::cvtColor(gpuImg, gpuImg, cv::COLOR_BGR2RGB);
+        //cv::cuda::cvtColor(gpuImg, gpuImg, cv::COLOR_BGR2RGB);
 
         // TODO: Define any preprocessing code here, such as resizing
         auto resized = Engine<float>::resizeKeepAspectRatioPadRightBottom(gpuImg, m_inputH, m_inputW);
@@ -91,7 +91,7 @@ bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32
 
     // Convert the batch from NHWC to NCHW
     // ALso apply normalization, scaling, and mean subtraction
-    auto mfloat = Engine<float>::blobFromGpuMats(inputImgs, m_subVals, m_divVals, m_normalize);
+    auto mfloat = Engine<float>::blobFromGpuMats(inputImgs, m_subVals, m_divVals, m_normalize, true);
     auto *dataPointer = mfloat.ptr<void>();
 
     // Copy the GPU buffer to member variable so that it persists
