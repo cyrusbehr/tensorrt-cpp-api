@@ -250,7 +250,7 @@ bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<flo
     }
 
     // Load the TensorRT engine file into memory
-    return loadNetwork(engineName, subVals, divVals, normalize);
+    return loadNetwork(enginePath.string(), subVals, divVals, normalize);
 }
 
 template <typename T>
