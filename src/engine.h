@@ -6,6 +6,7 @@
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <fstream>
+#include <filesystem>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/cudaimgproc.hpp>
@@ -130,7 +131,7 @@ public:
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
     bool buildLoadNetwork(std::string onnxModelPath, const std::array<float, 3> &subVals = {0.f, 0.f, 0.f},
-                          const std::array<float, 3> &divVals = {1.f, 1.f, 1.f}, bool normalize = true);
+                          const std::array<float, 3> &divVals = {1.f, 1.f, 1.f}, bool normalize = true, const std::string &engineDir = "");
 
     // Load a TensorRT engine file from disk into memory
     // The default implementation will normalize values between [0.f, 1.f]
@@ -175,7 +176,7 @@ public:
 
 private:
     // Build the network
-    bool build(std::string onnxModelPath, const std::array<float, 3> &subVals, const std::array<float, 3> &divVals, bool normalize);
+    bool build(std::string onnxModelPath, const std::array<float, 3> &subVals, const std::array<float, 3> &divVals, bool normalize, const std::string &engineDir);
 
     // Converts the engine options into a string
     std::string serializeEngineOptions(const Options &options, const std::string &onnxModelPath);
@@ -224,13 +225,14 @@ template <typename T> void Engine<T>::clearGpuBuffers() {
 
 template <typename T>
 bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<float, 3> &subVals, const std::array<float, 3> &divVals,
-                                 bool normalize) {
+                                 bool normalize, const std::string &engineDir) {
     // Only regenerate the engine file if it has not already been generated for
     // the specified options, otherwise load cached version from disk
     const auto engineName = serializeEngineOptions(m_options, onnxModelPath);
-    std::cout << "Searching for engine file with name: " << engineName << std::endl;
+    std::filesystem::path enginePath = std::filesystem::path(engineDir) / engineName;
+    std::cout << "Searching for engine file with path: " << enginePath.string() << std::endl;
 
-    if (Util::doesFileExist(engineName)) {
+    if (Util::doesFileExist(enginePath.string())) {
         std::cout << "Engine found, not regenerating..." << std::endl;
     } else {
         if (!Util::doesFileExist(onnxModelPath)) {
@@ -241,7 +243,7 @@ bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<flo
         std::cout << "Engine not found, generating. This could take a while..." << std::endl;
 
         // Build the onnx model into a TensorRT engine
-        auto ret = build(onnxModelPath, subVals, divVals, normalize);
+        auto ret = build(onnxModelPath, subVals, divVals, normalize, engineDir);
         if (!ret) {
             return false;
         }
@@ -392,7 +394,7 @@ bool Engine<T>::loadNetwork(std::string trtModelPath, const std::array<float, 3>
 }
 
 template <typename T>
-bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &subVals, const std::array<float, 3> &divVals, bool normalize) {
+bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &subVals, const std::array<float, 3> &divVals, bool normalize, const std::string &engineDir) {
     // Create our engine builder.
     auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(m_logger));
     if (!builder) {
@@ -543,7 +545,8 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
     }
 
     // Write the engine to disk
-    std::ofstream outfile(engineName, std::ofstream::binary);
+    const auto enginePath = std::filesystem::path(engineDir) / engineName;
+    std::ofstream outfile(enginePath, std::ofstream::binary);
     outfile.write(reinterpret_cast<const char *>(plan->data()), plan->size());
 
     std::cout << "Success, saved engine to " << engineName << std::endl;
