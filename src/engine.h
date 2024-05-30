@@ -13,6 +13,16 @@
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/opencv.hpp>
 
+
+#define CHECK(condition)                                                                                                                   \
+    do {                                                                                                                                   \
+        if (!(condition)) {                                                                                                                \
+            std::cerr << "Assertion failed: (" << #condition << "), function " << __FUNCTION__ << ", file " << __FILE__ << ", line "       \
+                      << __LINE__ << "." << std::endl;                                                                                     \
+            abort();                                                                                                                       \
+        }                                                                                                                                  \
+    } while (false);
+
 // Utility methods
 namespace Util {
 inline bool doesFileExist(const std::string &filepath) {
@@ -174,7 +184,7 @@ public:
     static void transformOutput(std::vector<std::vector<std::vector<T>>> &input, std::vector<T> &output);
     // Convert NHWC to NCHW and apply scaling and mean subtraction
     static cv::cuda::GpuMat blobFromGpuMats(const std::vector<cv::cuda::GpuMat> &batchInput, const std::array<float, 3> &subVals,
-                                            const std::array<float, 3> &divVals, bool normalize);
+                                            const std::array<float, 3> &divVals, bool normalize, bool swapRB = false);
 
 private:
     // Build the network
@@ -688,18 +698,31 @@ bool Engine<T>::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &i
 
 template <typename T>
 cv::cuda::GpuMat Engine<T>::blobFromGpuMats(const std::vector<cv::cuda::GpuMat> &batchInput, const std::array<float, 3> &subVals,
-                                            const std::array<float, 3> &divVals, bool normalize) {
+                                            const std::array<float, 3> &divVals, bool normalize, bool swapRB) {
+   
+    CHECK(!batchInput.empty())
+    CHECK(batchInput[0].channels() == 3)
+    
     cv::cuda::GpuMat gpu_dst(1, batchInput[0].rows * batchInput[0].cols * batchInput.size(), CV_8UC3);
 
     size_t width = batchInput[0].cols * batchInput[0].rows;
-    for (size_t img = 0; img < batchInput.size(); img++) {
-        std::vector<cv::cuda::GpuMat> input_channels{
-            cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img])),
-            cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
-            cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width * 2 + width * 3 * img]))};
-        cv::cuda::split(batchInput[img], input_channels); // HWC -> CHW
+    if (swapRB) {
+        for (size_t img = 0; img < batchInput.size(); ++img) {
+            std::vector<cv::cuda::GpuMat> input_channels{
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width * 2 + width * 3 * img])),
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img]))};
+            cv::cuda::split(batchInput[img], input_channels); // HWC -> CHW
+        }
+    } else {
+        for (size_t img = 0; img < batchInput.size(); ++img) {
+            std::vector<cv::cuda::GpuMat> input_channels{
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[0 + width * 3 * img])),
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width + width * 3 * img])),
+                cv::cuda::GpuMat(batchInput[0].rows, batchInput[0].cols, CV_8U, &(gpu_dst.ptr()[width * 2 + width * 3 * img]))};
+            cv::cuda::split(batchInput[img], input_channels); // HWC -> CHW
+        }
     }
-
     cv::cuda::GpuMat mfloat;
     if (normalize) {
         // [0.f, 1.f]
