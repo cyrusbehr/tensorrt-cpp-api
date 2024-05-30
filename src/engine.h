@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
+#include <filesystem>
 #include <fstream>
 #include <opencv2/core/cuda.hpp>
 #include <opencv2/cudaarithm.hpp>
@@ -77,6 +78,8 @@ struct Options {
     int32_t maxBatchSize = 16;
     // GPU device index
     int deviceIndex = 0;
+    // Directory where the engine file should be saved
+    std::string engineFileDir = ".";
 };
 
 // Class used for int8 calibration
@@ -228,9 +231,11 @@ bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<flo
     // Only regenerate the engine file if it has not already been generated for
     // the specified options, otherwise load cached version from disk
     const auto engineName = serializeEngineOptions(m_options, onnxModelPath);
-    std::cout << "Searching for engine file with name: " << engineName << std::endl;
+    std::filesystem::path enginePath = std::filesystem::path(m_options.engineFileDir) / engineName;
 
-    if (Util::doesFileExist(engineName)) {
+    std::cout << "Searching for engine file with name: " << enginePath << std::endl;
+
+    if (Util::doesFileExist(enginePath)) {
         std::cout << "Engine found, not regenerating..." << std::endl;
     } else {
         if (!Util::doesFileExist(onnxModelPath)) {
@@ -248,7 +253,7 @@ bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<flo
     }
 
     // Load the TensorRT engine file into memory
-    return loadNetwork(engineName, subVals, divVals, normalize);
+    return loadNetwork(enginePath, subVals, divVals, normalize);
 }
 
 template <typename T>
@@ -543,10 +548,11 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
     }
 
     // Write the engine to disk
-    std::ofstream outfile(engineName, std::ofstream::binary);
+    const auto enginePath = std::filesystem::path(m_options.engineFileDir) / engineName;
+    std::ofstream outfile(enginePath, std::ofstream::binary);
     outfile.write(reinterpret_cast<const char *>(plan->data()), plan->size());
 
-    std::cout << "Success, saved engine to " << engineName << std::endl;
+    std::cout << "Success, saved engine to " << enginePath << std::endl;
 
     Util::checkCudaErrorCode(cudaStreamDestroy(profileStream));
     return true;

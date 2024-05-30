@@ -24,6 +24,8 @@ int main(int argc, char *argv[]) {
     options.optBatchSize = 1;
     // Specify the maximum batch size we plan on running.
     options.maxBatchSize = 1;
+    // Specify the directory where you want the model engine model file saved.
+    options.engineFileDir = ".";
 
     Engine<float> engine(options);
 
