@@ -9,14 +9,6 @@
 using namespace nvinfer1;
 using namespace Util;
 
-std::vector<std::string> Util::getFilesInDirectory(const std::string &dirPath) {
-    std::vector<std::string> filepaths;
-    for (const auto &entry : std::filesystem::directory_iterator(dirPath)) {
-        filepaths.emplace_back(entry.path().string());
-    }
-    return filepaths;
-}
-
 void Logger::log(Severity severity, const char *msg) noexcept {
     switch (severity) {
         case Severity::kVERBOSE:

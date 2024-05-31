@@ -15,6 +15,7 @@ enum class LogLevel {
     Unknown
 };
 
+
 // Get the log level string from the environment variable
 std::string getLogLevelFromEnvironment() {
     const char* envValue = std::getenv("LOG_LEVEL");
