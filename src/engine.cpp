@@ -18,9 +18,24 @@ std::vector<std::string> Util::getFilesInDirectory(const std::string &dirPath) {
 }
 
 void Logger::log(Severity severity, const char *msg) noexcept {
-    // Only log Warnings or more important.
-    if (severity <= Severity::kWARNING) {
-        spdlog::warn(msg);
+    switch (severity) {
+        case Severity::kVERBOSE:
+            spdlog::debug(msg);
+            break;
+        case Severity::kINFO:
+            spdlog::info(msg);
+            break;
+        case Severity::kWARNING:
+            spdlog::warn(msg);
+            break;
+        case Severity::kERROR:
+            spdlog::error(msg);
+            break;
+        case Severity::kINTERNAL_ERROR:
+            spdlog::critical(msg);
+            break;
+        default:
+            spdlog::info("Unexpected severity level");
     }
 }
 
