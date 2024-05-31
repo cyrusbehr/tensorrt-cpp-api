@@ -13,12 +13,13 @@
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/opencv.hpp>
 
+#include "logger.h"
+
 
 #define CHECK(condition)                                                                                                                   \
     do {                                                                                                                                   \
         if (!(condition)) {                                                                                                                \
-            std::cerr << "Assertion failed: (" << #condition << "), function " << __FUNCTION__ << ", file " << __FILE__ << ", line "       \
-                      << __LINE__ << "." << std::endl;                                                                                     \
+            spdlog::error("Assertion failed: ({}), function {}, file {}, line {}.", #condition, __FUNCTION__, __FILE__, __LINE__);         \
             abort();                                                                                                                       \
         }                                                                                                                                  \
     } while (false);
@@ -34,7 +35,7 @@ inline void checkCudaErrorCode(cudaError_t code) {
     if (code != 0) {
         std::string errMsg = "CUDA operation failed with code: " + std::to_string(code) + "(" + cudaGetErrorName(code) +
                              "), with message: " + cudaGetErrorString(code);
-        std::cout << errMsg << std::endl;
+        spdlog::error(errMsg);
         throw std::runtime_error(errMsg);
     }
 }
@@ -242,18 +243,19 @@ bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<flo
     // the specified options, otherwise load cached version from disk
     const auto engineName = serializeEngineOptions(m_options, onnxModelPath);
     std::filesystem::path enginePath = std::filesystem::path(m_options.engineFileDir) / engineName;
-
-    std::cout << "Searching for engine file with name: " << enginePath << std::endl;
+    spdlog::info("Searching for engine file with name: {}", enginePath.string());
 
     if (Util::doesFileExist(enginePath)) {
-        std::cout << "Engine found, not regenerating..." << std::endl;
+        spdlog::info("Engine found, not regenerating...");
     } else {
         if (!Util::doesFileExist(onnxModelPath)) {
-            throw std::runtime_error("Could not find onnx model at path: " + onnxModelPath);
+            auto msg = "Could not find onnx model at path: " + onnxModelPath;
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
 
         // Was not able to find the engine file, generate...
-        std::cout << "Engine not found, generating. This could take a while..." << std::endl;
+        spdlog::info("Engine not found, generating. This could take a while...");
 
         // Build the onnx model into a TensorRT engine
         auto ret = build(onnxModelPath, subVals, divVals, normalize);
@@ -275,10 +277,12 @@ bool Engine<T>::loadNetwork(std::string trtModelPath, const std::array<float, 3>
 
     // Read the serialized model from disk
     if (!Util::doesFileExist(trtModelPath)) {
-        std::cout << "Error, unable to read TensorRT model at path: " + trtModelPath << std::endl;
+        auto msg = "Error, unable to read TensorRT model at path: " + trtModelPath;
+        spdlog::error(msg);
         return false;
     } else {
-        std::cout << "Loading TensorRT engine file at path: " << trtModelPath << std::endl;
+        auto msg = "Loading TensorRT engine file at path: " + trtModelPath;
+        spdlog::info(msg);
     }
 
     std::ifstream file(trtModelPath, std::ios::binary | std::ios::ate);
@@ -287,7 +291,9 @@ bool Engine<T>::loadNetwork(std::string trtModelPath, const std::array<float, 3>
 
     std::vector<char> buffer(size);
     if (!file.read(buffer.data(), size)) {
-        throw std::runtime_error("Unable to read engine file");
+        auto msg = "Error, unable to read engine file";
+        spdlog::error(msg);
+        throw std::runtime_error(msg);
     }
 
     // Create a runtime to deserialize the engine file.
@@ -303,6 +309,7 @@ bool Engine<T>::loadNetwork(std::string trtModelPath, const std::array<float, 3>
         cudaGetDeviceCount(&numGPUs);
         auto errMsg = "Unable to set GPU device index to: " + std::to_string(m_options.deviceIndex) + ". Note, your device has " +
                       std::to_string(numGPUs) + " CUDA-capable GPU(s).";
+        spdlog::error(errMsg);
         throw std::runtime_error(errMsg);
     }
 
@@ -345,7 +352,9 @@ bool Engine<T>::loadNetwork(std::string trtModelPath, const std::array<float, 3>
         if (tensorType == nvinfer1::TensorIOMode::kINPUT) {
             // The implementation currently only supports inputs of type float
             if (m_engine->getTensorDataType(tensorName) != nvinfer1::DataType::kFLOAT) {
-                throw std::runtime_error("Error, the implementation currently only supports float inputs");
+                auto msg = "Error, the implementation currently only supports float inputs";
+                spdlog::error(msg);
+                throw std::runtime_error(msg);
             }
 
             // Don't need to allocate memory for inputs as we will be using the OpenCV
@@ -358,25 +367,33 @@ bool Engine<T>::loadNetwork(std::string trtModelPath, const std::array<float, 3>
             // Ensure the model output data type matches the template argument
             // specified by the user
             if (tensorDataType == nvinfer1::DataType::kFLOAT && !std::is_same<float, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type float. Engine class "
-                                         "template parameter must be adjusted.");
+                auto msg = "Error, the model has expected output of type float. Engine class template parameter must be adjusted.";
+                spdlog::error(msg);
+                throw std::runtime_error(msg);
             } else if (tensorDataType == nvinfer1::DataType::kHALF && !std::is_same<__half, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type __half. Engine class "
-                                         "template parameter must be adjusted.");
+                auto msg = "Error, the model has expected output of type __half. Engine class template parameter must be adjusted.";
+                spdlog::error(msg);
+                throw std::runtime_error(msg);
             } else if (tensorDataType == nvinfer1::DataType::kINT8 && !std::is_same<int8_t, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type int8_t. Engine class "
-                                         "template parameter must be adjusted.");
+                auto msg = "Error, the model has expected output of type int8_t. Engine class template parameter must be adjusted.";
+                spdlog::error(msg);
+                throw std::runtime_error(msg);
             } else if (tensorDataType == nvinfer1::DataType::kINT32 && !std::is_same<int32_t, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type int32_t. Engine "
-                                         "class template parameter must be adjusted.");
+                auto msg = "Error, the model has expected output of type int32_t. Engine class template parameter must be adjusted.";
+                spdlog::error(msg);
+                throw std::runtime_error(msg);
             } else if (tensorDataType == nvinfer1::DataType::kBOOL && !std::is_same<bool, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type bool. Engine class "
-                                         "template parameter must be adjusted.");
+                auto msg = "Error, the model has expected output of type bool. Engine class template parameter must be adjusted.";
+                spdlog::error(msg);
+                throw std::runtime_error(msg);
             } else if (tensorDataType == nvinfer1::DataType::kUINT8 && !std::is_same<uint8_t, T>::value) {
-                throw std::runtime_error("Error, the model has expected output of type uint8_t. Engine "
-                                         "class template parameter must be adjusted.");
+                auto msg = "Error, the model has expected output of type uint8_t. Engine class template parameter must be adjusted.";
+                spdlog::error(msg);
+                throw std::runtime_error(msg);
             } else if (tensorDataType == nvinfer1::DataType::kFP8) {
-                throw std::runtime_error("Error, model has unsupported output type");
+                auto msg = "Error, the model has expected output of type kFP8. This is not supported by the Engine class.";
+                spdlog::error(msg);
+                throw std::runtime_error(msg);
             }
 
             // The binding is an output
@@ -395,7 +412,9 @@ bool Engine<T>::loadNetwork(std::string trtModelPath, const std::array<float, 3>
             // memory)
             Util::checkCudaErrorCode(cudaMallocAsync(&m_buffers[i], outputLength * m_options.maxBatchSize * sizeof(T), stream));
         } else {
-            throw std::runtime_error("Error, IO Tensor is neither an input or output!");
+            auto msg = "Error, IO Tensor is neither an input or output!";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
     }
 
@@ -438,7 +457,9 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
 
     std::vector<char> buffer(size);
     if (!file.read(buffer.data(), size)) {
-        throw std::runtime_error("Unable to read engine file");
+        auto msg = "Error, unable to read engine file";
+        spdlog::error(msg);
+        throw std::runtime_error(msg);
     }
 
     // Parse the buffer we read into memory.
@@ -450,13 +471,16 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
     // Ensure that all the inputs have the same batch size
     const auto numInputs = network->getNbInputs();
     if (numInputs < 1) {
-        throw std::runtime_error("Error, model needs at least 1 input!");
+        auto msg = "Error, model needs at least 1 input!";
+        spdlog::error(msg);
+        throw std::runtime_error(msg);
     }
     const auto input0Batch = network->getInput(0)->getDimensions().d[0];
     for (int32_t i = 1; i < numInputs; ++i) {
         if (network->getInput(i)->getDimensions().d[0] != input0Batch) {
-            throw std::runtime_error("Error, the model has multiple inputs, each "
-                                     "with differing batch sizes!");
+            auto msg = "Error, the model has multiple inputs, each with differing batch sizes!";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
     }
 
@@ -464,14 +488,16 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
     bool doesSupportDynamicBatch = false;
     if (input0Batch == -1) {
         doesSupportDynamicBatch = true;
-        std::cout << "Model supports dynamic batch size" << std::endl;
+        spdlog::info("Model supports dynamic batch size");
     } else {
-        std::cout << "Model only supports fixed batch size of " << input0Batch << std::endl;
+        spdlog::info("Model only supports fixed batch size of {}", input0Batch);
         // If the model supports a fixed batch size, ensure that the maxBatchSize
         // and optBatchSize were set correctly.
         if (m_options.optBatchSize != input0Batch || m_options.maxBatchSize != input0Batch) {
-            throw std::runtime_error("Error, model only supports a fixed batch size of " + std::to_string(input0Batch) +
-                                     ". Must set Options.optBatchSize and Options.maxBatchSize to 1");
+            auto msg = "Error, model only supports a fixed batch size of " + std::to_string(input0Batch) +
+                       ". Must set Options.optBatchSize and Options.maxBatchSize to 1";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
     }
 
@@ -510,24 +536,31 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
     if (m_options.precision == Precision::FP16) {
         // Ensure the GPU supports FP16 inference
         if (!builder->platformHasFastFp16()) {
-            throw std::runtime_error("Error: GPU does not support FP16 precision");
+            auto msg = "Error: GPU does not support FP16 precision";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
         config->setFlag(nvinfer1::BuilderFlag::kFP16);
     } else if (m_options.precision == Precision::INT8) {
         if (numInputs > 1) {
-            throw std::runtime_error("Error, this implementation currently only supports INT8 "
-                                     "quantization for single input models");
+            auto msg = "Error, this implementation currently only supports INT8 "
+                       "quantization for single input models";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
 
         // Ensure the GPU supports INT8 Quantization
         if (!builder->platformHasFastInt8()) {
-            throw std::runtime_error("Error: GPU does not support INT8 precision");
+            auto msg = "Error: GPU does not support INT8 precision";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
 
         // Ensure the user has provided path to calibration data directory
         if (m_options.calibrationDataDirectoryPath.empty()) {
-            throw std::runtime_error("Error: If INT8 precision is selected, must provide path to "
-                                     "calibration data directory to Engine::build method");
+            auto msg = "Error: If INT8 precision is selected, must provide path to "
+                       "calibration data directory to Engine::build method";
+            throw std::runtime_error(msg);
         }
 
         config->setFlag((nvinfer1::BuilderFlag::kINT8));
@@ -561,8 +594,7 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
     const auto enginePath = std::filesystem::path(m_options.engineFileDir) / engineName;
     std::ofstream outfile(enginePath, std::ofstream::binary);
     outfile.write(reinterpret_cast<const char *>(plan->data()), plan->size());
-
-    std::cout << "Success, saved engine to " << enginePath << std::endl;
+    spdlog::info("Success, saved engine to {}", enginePath.string());
 
     Util::checkCudaErrorCode(cudaStreamDestroy(profileStream));
     return true;
@@ -573,34 +605,32 @@ bool Engine<T>::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &i
                              std::vector<std::vector<std::vector<T>>> &featureVectors) {
     // First we do some error checking
     if (inputs.empty() || inputs[0].empty()) {
-        std::cout << "===== Error =====" << std::endl;
-        std::cout << "Provided input vector is empty!" << std::endl;
+        spdlog::error("Provided input vector is empty!");
         return false;
     }
 
     const auto numInputs = m_inputDims.size();
     if (inputs.size() != numInputs) {
-        std::cout << "===== Error =====" << std::endl;
-        std::cout << "Incorrect number of inputs provided!" << std::endl;
+        spdlog::error("Incorrect number of inputs provided!");
         return false;
     }
 
     // Ensure the batch size does not exceed the max
     if (inputs[0].size() > static_cast<size_t>(m_options.maxBatchSize)) {
-        std::cout << "===== Error =====" << std::endl;
-        std::cout << "The batch size is larger than the model expects!" << std::endl;
-        std::cout << "Model max batch size: " << m_options.maxBatchSize << std::endl;
-        std::cout << "Batch size provided to call to runInference: " << inputs[0].size() << std::endl;
+        spdlog::error("===== Error =====");
+        spdlog::error("The batch size is larger than the model expects!");
+        spdlog::error("Model max batch size: {}", m_options.maxBatchSize);
+        spdlog::error("Batch size provided to call to runInference: {}", inputs[0].size());
         return false;
     }
 
     // Ensure that if the model has a fixed batch size that is greater than 1, the
     // input has the correct length
     if (m_inputBatchSize != -1 && inputs[0].size() != static_cast<size_t>(m_inputBatchSize)) {
-        std::cout << "===== Error =====" << std::endl;
-        std::cout << "The batch size is different from what the model expects!" << std::endl;
-        std::cout << "Model batch size: " << m_inputBatchSize << std::endl;
-        std::cout << "Batch size provided to call to runInference: " << inputs[0].size() << std::endl;
+        spdlog::error("===== Error =====");
+        spdlog::error("The batch size is different from what the model expects!");
+        spdlog::error("Model batch size: {}", m_inputBatchSize);
+        spdlog::error("Batch size provided to call to runInference: {}", inputs[0].size());
         return false;
     }
 
@@ -608,8 +638,8 @@ bool Engine<T>::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &i
     // Make sure the same batch size was provided for all inputs
     for (size_t i = 1; i < inputs.size(); ++i) {
         if (inputs[i].size() != static_cast<size_t>(batchSize)) {
-            std::cout << "===== Error =====" << std::endl;
-            std::cout << "The batch size needs to be constant for all inputs!" << std::endl;
+            spdlog::error("===== Error =====");
+            spdlog::error("The batch size is different for each input!");
             return false;
         }
     }
@@ -627,11 +657,11 @@ bool Engine<T>::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &i
 
         auto &input = batchInput[0];
         if (input.channels() != dims.d[0] || input.rows != dims.d[1] || input.cols != dims.d[2]) {
-            std::cout << "===== Error =====" << std::endl;
-            std::cout << "Input does not have correct size!" << std::endl;
-            std::cout << "Expected: (" << dims.d[0] << ", " << dims.d[1] << ", " << dims.d[2] << ")" << std::endl;
-            std::cout << "Got: (" << input.channels() << ", " << input.rows << ", " << input.cols << ")" << std::endl;
-            std::cout << "Ensure you resize your input image to the correct size" << std::endl;
+            spdlog::error("===== Error =====");
+            spdlog::error("Input does not have correct size!");
+            spdlog::error("Expected: ({}, {}, {})", dims.d[0], dims.d[1], dims.d[2]);
+            spdlog::error("Got: ({}, {}, {})", input.channels(), input.rows, input.cols);
+            spdlog::error("Ensure you resize your input image to the correct size");
             return false;
         }
 
@@ -652,7 +682,9 @@ bool Engine<T>::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &i
 
     // Ensure all dynamic bindings have been defined.
     if (!m_context->allInputDimensionsSpecified()) {
-        throw std::runtime_error("Error, not all required dimensions specified.");
+        auto msg = "Error, not all required dimensions specified.";
+        spdlog::error(msg);
+        throw std::runtime_error(msg);
     }
 
     // Set the address of the input and output buffers
@@ -749,7 +781,9 @@ template <typename T> std::string Engine<T>::serializeEngineOptions(const Option
     getDeviceNames(deviceNames);
 
     if (static_cast<size_t>(options.deviceIndex) >= deviceNames.size()) {
-        throw std::runtime_error("Error, provided device index is out of range!");
+        auto msg = "Error, provided device index is out of range!";
+        spdlog::error(msg);
+        throw std::runtime_error(msg);
     }
 
     auto deviceName = deviceNames[options.deviceIndex];
@@ -770,6 +804,7 @@ template <typename T> std::string Engine<T>::serializeEngineOptions(const Option
     engineName += "." + std::to_string(options.maxBatchSize);
     engineName += "." + std::to_string(options.optBatchSize);
 
+    spdlog::info("Engine name: {}", engineName);
     return engineName;
 }
 
@@ -801,7 +836,9 @@ cv::cuda::GpuMat Engine<T>::resizeKeepAspectRatioPadRightBottom(const cv::cuda::
 template <typename T>
 void Engine<T>::transformOutput(std::vector<std::vector<std::vector<T>>> &input, std::vector<std::vector<T>> &output) {
     if (input.size() != 1) {
-        throw std::logic_error("The feature vector has incorrect dimensions!");
+        auto msg = "The feature vector has incorrect dimensions!";
+        spdlog::error(msg);
+        throw std::logic_error(msg);
     }
 
     output = std::move(input[0]);
@@ -809,7 +846,9 @@ void Engine<T>::transformOutput(std::vector<std::vector<std::vector<T>>> &input,
 
 template <typename T> void Engine<T>::transformOutput(std::vector<std::vector<std::vector<T>>> &input, std::vector<T> &output) {
     if (input.size() != 1 || input[0].size() != 1) {
-        throw std::logic_error("The feature vector has incorrect dimensions!");
+        auto msg = "The feature vector has incorrect dimensions!";
+        spdlog::error(msg);
+        throw std::logic_error(msg);
     }
 
     output = std::move(input[0][0]);

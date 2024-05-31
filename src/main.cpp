@@ -1,4 +1,5 @@
 #include "cmd_line_parser.h"
+#include "logger.h"
 #include "engine.h"
 #include <chrono>
 #include <opencv2/cudaimgproc.hpp>
@@ -6,6 +7,10 @@
 
 int main(int argc, char *argv[]) {
     CommandLineArguments arguments;
+
+    std::string logLevelStr = getLogLevelFromEnvironment();
+    spdlog::level::level_enum logLevel = toSpdlogLevel(logLevelStr);
+    spdlog::set_level(logLevel);
 
     // Parse the command line arguments
     if (!parseArguments(argc, argv, arguments)) {
@@ -58,7 +63,9 @@ int main(int argc, char *argv[]) {
         // Load the TensorRT engine file directly
         bool succ = engine.loadNetwork(arguments.trtModelPath, subVals, divVals, normalize);
         if (!succ) {
-            throw std::runtime_error("Unable to load TensorRT engine.");
+            const std::string msg = "Unable to load TensorRT engine.";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
     }
 
@@ -67,7 +74,9 @@ int main(int argc, char *argv[]) {
     const std::string inputImage = "../inputs/team.jpg";
     auto cpuImg = cv::imread(inputImage);
     if (cpuImg.empty()) {
-        throw std::runtime_error("Unable to read image at path: " + inputImage);
+        const std::string msg = "Unable to read image at path: " + inputImage;
+        spdlog::error(msg);
+        throw std::runtime_error(msg);
     }
 
     // Upload the image GPU memory
@@ -110,18 +119,20 @@ int main(int argc, char *argv[]) {
     }
 
     // Warm up the network before we begin the benchmark
-    std::cout << "\nWarming up the network..." << std::endl;
+    spdlog::info("Warming up the network...");
     std::vector<std::vector<std::vector<float>>> featureVectors;
     for (int i = 0; i < 100; ++i) {
         bool succ = engine.runInference(inputs, featureVectors);
         if (!succ) {
-            throw std::runtime_error("Unable to run inference.");
+            const std::string msg = "Unable to run inference.";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
         }
     }
 
     // Benchmark the inference time
     size_t numIterations = 1000;
-    std::cout << "Warmup done. Running benchmarks (" << numIterations << " iterations)...\n" << std::endl;
+    spdlog::info("Running benchmarks ({} iterations)...", numIterations);
     preciseStopwatch stopwatch;
     for (size_t i = 0; i < numIterations; ++i) {
         featureVectors.clear();
@@ -130,30 +141,28 @@ int main(int argc, char *argv[]) {
     auto totalElapsedTimeMs = stopwatch.elapsedTime<float, std::chrono::milliseconds>();
     auto avgElapsedTimeMs = totalElapsedTimeMs / numIterations / static_cast<float>(inputs[0].size());
 
-    std::cout << "Benchmarking complete!" << std::endl;
-    std::cout << "======================" << std::endl;
-    std::cout << "Avg time per sample: " << std::endl;
-    std::cout << avgElapsedTimeMs << " ms" << std::endl;
-    std::cout << "Batch size: " << std::endl;
-    std::cout << inputs[0].size() << std::endl;
-    std::cout << "Avg FPS: " << std::endl;
-    std::cout << static_cast<int>(1000 / avgElapsedTimeMs) << " fps" << std::endl;
-    std::cout << "======================\n" << std::endl;
+    spdlog::info("Benchmarking complete!");
+    spdlog::info("======================");
+    spdlog::info("Avg time per sample: ");
+    spdlog::info("Avg time per sample: {} ms", avgElapsedTimeMs);
+    spdlog::info("Batch size: {}", inputs[0].size());
+    spdlog::info("Avg FPS: {} fps", static_cast<int>(1000 / avgElapsedTimeMs));
+    spdlog::info("======================\n");
 
     // Print the feature vectors
     for (size_t batch = 0; batch < featureVectors.size(); ++batch) {
         for (size_t outputNum = 0; outputNum < featureVectors[batch].size(); ++outputNum) {
-            std::cout << "Batch " << batch << ", "
-                      << "output " << outputNum << std::endl;
+            spdlog::info("Batch {}, output {}", batch, outputNum);
+            std::string output;
             int i = 0;
             for (const auto &e : featureVectors[batch][outputNum]) {
-                std::cout << e << " ";
+                output += std::to_string(e) + " ";
                 if (++i == 10) {
-                    std::cout << "...";
+                    output += "...";
                     break;
                 }
             }
-            std::cout << "\n" << std::endl;
+            spdlog::info("{}", output);
         }
     }
 

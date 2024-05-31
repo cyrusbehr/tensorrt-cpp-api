@@ -61,6 +61,7 @@ You will need to supply your own onnx model for this sample code or you can down
   - Required < 9 (OpenCV GPU does not yet support)
 - `sudo apt install build-essential`
 - `sudo snap install cmake --classic`
+- `sudo apt install libspdlog-dev libfmt-dev` (for logging)
 - Install OpenCV with cuda support. To compile OpenCV from source, run the `build_opencv.sh` script provided in `./scripts/`.
   - If you use the provided script and you have installed cuDNN to a non-standard location, you must modify the `CUDNN_INCLUDE_DIR` and `CUDNN_LIBRARY` variables in the script.  
   - Recommended >= 4.8
@@ -138,7 +139,9 @@ If so, check out my two latest projects, [YOLOv8-TensorRT-CPP](https://github.co
 - You can also check out my [deep-dive video](https://youtu.be/Z0n5aLmcRHQ) in which I explain every line of code.
 
 ### How to Debug
-- If you have issues creating the TensorRT engine file from the onnx model, navigate to `src/engine.cpp` and change the log level by changing the severity level to `kVERBOSE` and rebuild and rerun. This should give you more information on where exactly the build process is failing.
+- The implementation uses the `spdlog` library for logging. You can change the log level by setting the environment variable `LOG_LEVEL` to one of the following values: `trace`, `debug`, `info`, `warn`, `error`, `critical`, `off`.
+
+- If you have issues creating the TensorRT engine file from the onnx model, consider setting the environment variable `LOG_LEVEL` to `trace` and re-run the application. This should give you more information on where exactly the build process is failing.
 
 ### Show your Appreciation
 If this project was helpful to you, I would appreciate if you could give it a star. That will encourage me to ensure it's up to date and solve issues quickly. I also do consulting work if you require more specific help. Connect with me on [LinkedIn](https://www.linkedin.com/in/cyrus-behroozi/). 
