@@ -17,7 +17,7 @@ enum class LogLevel {
 
 
 // Get the log level string from the environment variable
-std::string getLogLevelFromEnvironment() {
+inline std::string getLogLevelFromEnvironment() {
     const char* envValue = std::getenv("LOG_LEVEL");
     if (envValue) {
         return std::string(envValue);
@@ -28,7 +28,7 @@ std::string getLogLevelFromEnvironment() {
 }
 
 // Convert log level string to LogLevel enum
-LogLevel parseLogLevel(const std::string& logLevelStr) {
+inline LogLevel parseLogLevel(const std::string& logLevelStr) {
     if (logLevelStr == "trace") {
         return LogLevel::Trace;
     } else if (logLevelStr == "debug") {
@@ -50,7 +50,7 @@ LogLevel parseLogLevel(const std::string& logLevelStr) {
 }
 
 // Convert LogLevel enum to spdlog::level::level_enum
-spdlog::level::level_enum toSpdlogLevel(const std::string& logLevelStr) {
+inline spdlog::level::level_enum toSpdlogLevel(const std::string& logLevelStr) {
     LogLevel logLevel = parseLogLevel(logLevelStr);
     
     switch (logLevel) {
