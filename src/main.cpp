@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
 
     // Read the input image
     // TODO: You will need to read the input image required for your model
-    const std::string inputImage = "../inputs/team.jpg";
+    const std::string inputImage = "./inputs/team.jpg";
     auto cpuImg = cv::imread(inputImage);
     if (cpuImg.empty()) {
         const std::string msg = "Unable to read image at path: " + inputImage;

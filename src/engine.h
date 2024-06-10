@@ -11,6 +11,7 @@
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/opencv.hpp>
 
+#include "IEngine.h"
 #include "logger.h"
 #include "Int8Calibrator.h"
 #include "util/Util.h"
@@ -55,7 +56,8 @@ class Logger : public nvinfer1::ILogger {
     void log(Severity severity, const char *msg) noexcept override;
 };
 
-template <typename T> class Engine {
+template <typename T>
+class Engine : public IEngine<T> {
 public:
     Engine(const Options &options);
     ~Engine();
@@ -70,7 +72,7 @@ public:
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
     bool buildLoadNetwork(std::string onnxModelPath, const std::array<float, 3> &subVals = {0.f, 0.f, 0.f},
-                          const std::array<float, 3> &divVals = {1.f, 1.f, 1.f}, bool normalize = true);
+                          const std::array<float, 3> &divVals = {1.f, 1.f, 1.f}, bool normalize = true) override;
 
     // Load a TensorRT engine file from disk into memory
     // The default implementation will normalize values between [0.f, 1.f]
@@ -81,12 +83,12 @@ public:
     //    divVals = {0.5f, 0.5f, 0.5f};
     //    normalize = true;
     bool loadNetwork(std::string trtModelPath, const std::array<float, 3> &subVals = {0.f, 0.f, 0.f},
-                     const std::array<float, 3> &divVals = {1.f, 1.f, 1.f}, bool normalize = true);
+                     const std::array<float, 3> &divVals = {1.f, 1.f, 1.f}, bool normalize = true) override;
 
     // Run inference.
     // Input format [input][batch][cv::cuda::GpuMat]
     // Output format [batch][output][feature_vector]
-    bool runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inputs, std::vector<std::vector<std::vector<T>>> &featureVectors);
+    bool runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &inputs, std::vector<std::vector<std::vector<T>>> &featureVectors) override;
 
     // Utility method for resizing an image while maintaining the aspect ratio by
     // adding padding to smaller dimension after scaling While letterbox padding
@@ -97,8 +99,8 @@ public:
     static cv::cuda::GpuMat resizeKeepAspectRatioPadRightBottom(const cv::cuda::GpuMat &input, size_t height, size_t width,
                                                                 const cv::Scalar &bgcolor = cv::Scalar(0, 0, 0));
 
-    [[nodiscard]] const std::vector<nvinfer1::Dims3> &getInputDims() const { return m_inputDims; };
-    [[nodiscard]] const std::vector<nvinfer1::Dims> &getOutputDims() const { return m_outputDims; };
+    [[nodiscard]] const std::vector<nvinfer1::Dims3> &getInputDims() const override { return m_inputDims; };
+    [[nodiscard]] const std::vector<nvinfer1::Dims> &getOutputDims() const override { return m_outputDims; };
 
     // Utility method for transforming triple nested output array into 2D array
     // Should be used when the output batch size is 1, but there are multiple
