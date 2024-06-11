@@ -7,7 +7,8 @@ template <typename T>
 bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<float, 3> &subVals, const std::array<float, 3> &divVals,
                                  bool normalize) {
     const auto engineName = serializeEngineOptions(m_options, onnxModelPath);
-    std::filesystem::path enginePath = std::filesystem::path(m_options.engineFileDir) / engineName;
+    const auto engineDir = std::filesystem::path(m_options.engineFileDir);
+    std::filesystem::path enginePath = engineDir / engineName;
     spdlog::info("Searching for engine file with name: {}", enginePath.string());
 
     if (Util::doesFileExist(enginePath)) {
@@ -20,6 +21,10 @@ bool Engine<T>::buildLoadNetwork(std::string onnxModelPath, const std::array<flo
         }
 
         spdlog::info("Engine not found, generating. This could take a while...");
+        if (!std::filesystem::exists(engineDir)) {
+            std::filesystem::create_directories(engineDir);
+            spdlog::info("Created directory: {}", engineDir.string());
+        }
 
         auto ret = build(onnxModelPath, subVals, divVals, normalize);
         if (!ret) {
