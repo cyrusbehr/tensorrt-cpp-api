@@ -49,6 +49,12 @@ struct Options {
     int deviceIndex = 0;
     // Directory where the engine file should be saved
     std::string engineFileDir = ".";
+    // Maximum allowed input width
+    int32_t maxInputWidth = -1; // Default to -1 --> expecting fixed input size
+    // Minimum allowed input width
+    int32_t minInputWidth = -1; // Default to -1 --> expecting fixed input size
+    // Optimal input width
+    int32_t optInputWidth = -1; // Default to -1 --> expecting fixed input size
 };
 
 // Class to extend TensorRT logger
