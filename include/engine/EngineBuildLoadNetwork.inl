@@ -269,6 +269,23 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
         }
     }
 
+    const auto input3Batch = network->getInput(0)->getDimensions().d[3];
+    bool doesSupportDynamicWidth = false;
+    if (input3Batch == -1) {
+        doesSupportDynamicWidth = true;
+        spdlog::info("Model supports dynamic width. Using Options.maxInputWidth, Options.minInputWidth, and Options.optInputWidth to set the input width.");
+
+        // Check that the values of maxInputWidth, minInputWidth, and optInputWidth are valid
+        if (m_options.maxInputWidth < m_options.minInputWidth || m_options.maxInputWidth < m_options.optInputWidth ||
+            m_options.minInputWidth > m_options.optInputWidth
+            || m_options.maxInputWidth < 1 || m_options.minInputWidth < 1 || m_options.optInputWidth < 1) {
+            auto msg = "Error, invalid values for Options.maxInputWidth, Options.minInputWidth, and Options.optInputWidth";
+            spdlog::error(msg);
+            throw std::runtime_error(msg);
+        }
+    }
+
+
     auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
     if (!config) {
         return false;
@@ -284,18 +301,28 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
         int32_t inputC = inputDims.d[1];
         int32_t inputH = inputDims.d[2];
         int32_t inputW = inputDims.d[3];
+    
+        int32_t minInputWidth = std::max(m_options.minInputWidth, inputW);
 
         // Specify the optimization profile`
         if (doesSupportDynamicBatch) {
-            optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4(1, inputC, inputH, inputW));
+            optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4(1, inputC, inputH, minInputWidth));
         } else {
             optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kMIN,
-                                      nvinfer1::Dims4(m_options.optBatchSize, inputC, inputH, inputW));
+                                      nvinfer1::Dims4(m_options.optBatchSize, inputC, inputH, minInputWidth));
         }
-        optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kOPT,
-                                  nvinfer1::Dims4(m_options.optBatchSize, inputC, inputH, inputW));
-        optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kMAX,
-                                  nvinfer1::Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+
+        if (doesSupportDynamicWidth) {
+            optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kOPT,
+                                      nvinfer1::Dims4(m_options.optBatchSize, inputC, inputH, m_options.optInputWidth));
+            optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kMAX,
+                                      nvinfer1::Dims4(m_options.maxBatchSize, inputC, inputH, m_options.maxInputWidth));
+        } else {
+            optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kOPT,
+                                    nvinfer1::Dims4(m_options.optBatchSize, inputC, inputH, inputW));
+            optProfile->setDimensions(inputName, nvinfer1::OptProfileSelector::kMAX,
+                                    nvinfer1::Dims4(m_options.maxBatchSize, inputC, inputH, inputW));
+        }
     }
     config->addOptimizationProfile(optProfile);
 

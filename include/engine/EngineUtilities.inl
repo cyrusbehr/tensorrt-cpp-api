@@ -80,6 +80,9 @@ template <typename T> std::string Engine<T>::serializeEngineOptions(const Option
 
     engineName += "." + std::to_string(options.maxBatchSize);
     engineName += "." + std::to_string(options.optBatchSize);
+    engineName += "." + std::to_string(options.minInputWidth);
+    engineName += "." + std::to_string(options.optInputWidth);
+    engineName += "." + std::to_string(options.maxInputWidth);
 
     spdlog::info("Engine name: {}", engineName);
     return engineName;
