@@ -28,6 +28,13 @@
   </p>
 </p>
 
+## Looking for Maintainers 🚀
+
+This project is actively seeking maintainers to help guide its growth and improvement. If you're passionate about this project and interested in contributing, I’d love to hear from you!
+
+Please feel free to reach out via [LinkedIn](https://www.linkedin.com/in/cyrus-behroozi/) to discuss how you can get involved.
+
+
 # TensorRT C++ Tutorial
 *I read all the NVIDIA TensorRT docs so that you don't have to!*
 
