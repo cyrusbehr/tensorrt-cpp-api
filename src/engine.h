@@ -55,6 +55,9 @@ struct Options {
     int32_t minInputWidth = -1; // Default to -1 --> expecting fixed input size
     // Optimal input width
     int32_t optInputWidth = -1; // Default to -1 --> expecting fixed input size
+
+    //todo add support for dynamic height and depth
+    //todo properly implementing it requires additional interface, to avoid checking for param everywhere
 };
 
 // Class to extend TensorRT logger

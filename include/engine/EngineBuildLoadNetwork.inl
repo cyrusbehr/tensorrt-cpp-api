@@ -303,6 +303,8 @@ bool Engine<T>::build(std::string onnxModelPath, const std::array<float, 3> &sub
         int32_t inputW = inputDims.d[3];
     
         int32_t minInputWidth = std::max(m_options.minInputWidth, inputW);
+        //? in case there no dynamic width, use inputW anyway
+        if (not doesSupportDynamicWidth) {minInputWidth = inputW;}
 
         // Specify the optimization profile`
         if (doesSupportDynamicBatch) {

@@ -36,6 +36,12 @@ cmake -D CMAKE_BUILD_TYPE=RELEASE \
 -D CUDNN_INCLUDE_DIR=/usr/local/cuda/include \
 -D CUDNN_LIBRARY=/usr/local/cuda/lib64/libcudnn.so \
 ..
+#! cudnn is unused in this project, cudnn not required to work with cv::cuda::mat, cudnn not required for nms function
+#? cudnn required only by trt itself, not for opencv usage in this project //(and trt not use opencv)
+#-D CUDNN_INCLUDE_DIR=/usr/local/cuda/include \
+#-D CUDNN_LIBRARY=/usr/local/cuda/lib64/libcudnn.so \
+#-D OPENCV_DNN_CUDA=ON \
+#-D WITH_CUDNN=ON \
 
 make -j 8
 sudo make -j 8 install

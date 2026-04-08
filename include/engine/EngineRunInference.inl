@@ -51,6 +51,8 @@ bool Engine<T>::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &i
     cudaStream_t inferenceCudaStream;
     Util::checkCudaErrorCode(cudaStreamCreate(&inferenceCudaStream));
 
+    //? this vector is REQUIRED, there stored lifetime (memory) for each input
+    //? better name would be matsLifetime / memoryLifetime / memoryStorage 
     std::vector<cv::cuda::GpuMat> preprocessedInputs;
 
     // Preprocess all the inputs
@@ -80,7 +82,7 @@ bool Engine<T>::runInference(const std::vector<std::vector<cv::cuda::GpuMat>> &i
         // Copy over the input data and perform the preprocessing
         auto mfloat = blobFromGpuMats(batchInput, m_subVals, m_divVals, m_normalize);
         preprocessedInputs.push_back(mfloat);
-        m_buffers[i] = mfloat.ptr<void>();
+        m_buffers[i] = mfloat.ptr<void>(); //fix buffer indexing wrong for trt10...
     }
 
     // Ensure all dynamic bindings have been defined.
