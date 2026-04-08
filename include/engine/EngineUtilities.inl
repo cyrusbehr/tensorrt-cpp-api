@@ -104,11 +104,11 @@ cv::cuda::GpuMat Engine<T>::blobFromGpuMats(const std::vector<cv::cuda::GpuMat> 
 
     bool const&  invert_channels = swapRB;
 
-    auto const& indMref = individualMats[0];
     std::vector<cv::cuda::GpuMat> const& individualMats = batchInput;
+    auto const& indMref = individualMats[0];
     size_t size = 
             individualMats.size()
-            batch*
+            *
             indMref.cols //? assumed mats have valid size yet
             *
             indMref.rows
@@ -126,7 +126,7 @@ cv::cuda::GpuMat Engine<T>::blobFromGpuMats(const std::vector<cv::cuda::GpuMat> 
     for(uint batch_index = 0; batch_index < individualMats.size(); ++batch_index)
     {
         cv::cuda::GpuMat mfloat;
-        if (normalizeRGBtoFloat) {
+        if (normalize) {
             // [0.f, 1.f]
             individualMats[batch_index].convertTo(mfloat, CV_32FC3, 1.f / 255.f); //NOLINT magic 255.f
         } else {
