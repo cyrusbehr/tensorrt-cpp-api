@@ -52,6 +52,27 @@ private:
     Desc d_;
 };
 
+/// Byte size of a resolved (dtype, shape), with overflow checking -- the guard the buffer
+/// layer owes before any allocation. Errors (kInvalidArgument) on a dynamic shape or if
+/// the element count / byte size would overflow std::size_t. (GCC/Clang builtins; the
+/// library is Linux/GCC-Clang only.)
+inline Result<std::size_t> checkedByteSize(DType dtype, const Shape &shape) {
+    if (shape.isDynamic()) {
+        return Status{StatusCode::kInvalidArgument, "checkedByteSize requires a fully resolved (non-dynamic) shape"};
+    }
+    std::size_t count = 1;
+    for (int i = 0; i < shape.rank(); ++i) {
+        if (__builtin_mul_overflow(count, static_cast<std::size_t>(shape[i]), &count)) {
+            return Status{StatusCode::kInvalidArgument, "shape element count overflows std::size_t"};
+        }
+    }
+    std::size_t totalBits = 0;
+    if (__builtin_mul_overflow(count, static_cast<std::size_t>(bitsPerElement(dtype)), &totalBits)) {
+        return Status{StatusCode::kInvalidArgument, "tensor byte size overflows std::size_t"};
+    }
+    return (totalBits + 7) / 8;
+}
+
 template <class T> Result<std::span<const T>> TensorView::as() const {
     if (d_.device != Device::kHost) {
         return Status{StatusCode::kInvalidArgument, "TensorView::as<T>() requires a host tensor; copy to host first (Tensor::toHost)"};

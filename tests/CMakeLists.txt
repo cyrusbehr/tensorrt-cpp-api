@@ -26,7 +26,9 @@ gtest_discover_tests(trtcpp_core_tests)
 # GPU-required integration tests, labeled "gpu" so CI can exclude them (ctest -LE gpu).
 add_executable(trtcpp_cuda_tests
     test_cuda.cpp
-    test_device_tensor.cpp)
+    test_device_tensor.cpp
+    test_buffers.cpp)
+target_include_directories(trtcpp_cuda_tests PRIVATE ${CMAKE_SOURCE_DIR}/src) # internal detail headers
 target_link_libraries(trtcpp_cuda_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api GTest::gtest_main)
 gtest_discover_tests(trtcpp_cuda_tests PROPERTIES LABELS "gpu")
 

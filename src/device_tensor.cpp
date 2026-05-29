@@ -21,10 +21,11 @@ cudaMemcpyKind memcpyKind(Device src, Device dst) {
 } // namespace
 
 Result<Tensor> Tensor::allocate(DType dtype, Shape shape, Device device, int deviceId) {
-    if (shape.isDynamic()) {
-        return Status{StatusCode::kInvalidArgument, "Tensor::allocate requires a fully resolved (non-dynamic) shape"};
+    auto byteSize = checkedByteSize(dtype, shape); // rejects dynamic shapes and overflow
+    if (!byteSize) {
+        return byteSize.status();
     }
-    const std::size_t bytes = byteSizeOf(dtype, static_cast<std::size_t>(shape.numel()));
+    const std::size_t bytes = byteSize.value();
     void *ptr = nullptr;
     if (bytes > 0) {
         if (device == Device::kCuda) {
