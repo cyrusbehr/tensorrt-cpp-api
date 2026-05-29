@@ -25,6 +25,12 @@ public:
     /// Parse ONNX bytes (e.g. an in-memory or decrypted model) and build a serialized engine.
     Result<std::vector<std::byte>> buildFromOnnxBytes(std::span<const std::byte> onnx, const BuildOptions &options);
 
+    /// Build the engine if no fresh cached one exists in options.engineCacheDir, otherwise
+    /// reuse the cache. Returns the engine file path. The cache is keyed by ONNX content
+    /// hash + TRT version + GPU UUID + build options, with a JSON sidecar and atomic write;
+    /// a stale cache (changed ONNX/options/version/GPU) is detected and rebuilt.
+    Result<std::string> buildOrLoad(const std::string &onnxPath, const BuildOptions &options);
+
 private:
     std::shared_ptr<ILogger> logger_;
 };

@@ -1,8 +1,12 @@
 #include "tensorrt_cpp_api/engine_builder.h"
 
+#include "detail/engine_cache.h"
+#include "detail/sha256.h"
 #include "detail/trt_common.h"
 
 #include <cuda_runtime.h>
+
+#include <ctime>
 
 #include <NvInfer.h>
 #include <NvOnnxParser.h>
@@ -116,6 +120,38 @@ std::vector<std::byte> readFileBytes(const std::string &path, Status &status) {
     return bytes;
 }
 
+std::string trtVersionString() {
+    return std::to_string(NV_TENSORRT_MAJOR) + "." + std::to_string(NV_TENSORRT_MINOR) + "." + std::to_string(NV_TENSORRT_PATCH);
+}
+
+std::string cudaVersionString() {
+    int version = 0;
+    cudaRuntimeGetVersion(&version);
+    return std::to_string(version);
+}
+
+// A digest of the build options that affect the produced engine, so changing any of them
+// invalidates the cache.
+std::string buildOptionsDigest(const BuildOptions &options) {
+    std::string s = "p=";
+    s += toString(options.precision);
+    s += ";dla=" + std::to_string(options.dlaCore);
+    s += ";ws=" + std::to_string(options.workspaceBytes.value_or(0));
+    s += ";st=" + std::string(options.stronglyTyped.has_value() ? (options.stronglyTyped.value() ? "1" : "0") : "auto");
+    s += ";vc=" + std::to_string(static_cast<int>(options.versionCompatible));
+    s += ";hc=" + std::to_string(static_cast<int>(options.hardwareCompatible));
+    for (const std::string &lib : options.pluginLibraries) {
+        s += ";plugin=" + lib;
+    }
+    for (const OptimizationProfile &profile : options.profiles) {
+        s += "|prof";
+        for (const ProfileShape &input : profile.inputs) {
+            s += ":" + input.inputName + "[" + input.min.toString() + input.opt.toString() + input.max.toString() + "]";
+        }
+    }
+    return detail::sha256Hex(s.data(), s.size());
+}
+
 } // namespace
 
 EngineBuilder::EngineBuilder(std::shared_ptr<ILogger> logger) : logger_(std::move(logger)) {
@@ -131,6 +167,62 @@ Result<std::vector<std::byte>> EngineBuilder::buildFromOnnxFile(const std::strin
         return status;
     }
     return buildFromOnnxBytes(bytes, options);
+}
+
+Result<std::string> EngineBuilder::buildOrLoad(const std::string &onnxPath, const BuildOptions &options) {
+    Status status;
+    std::vector<std::byte> onnx = readFileBytes(onnxPath, status);
+    if (!status) {
+        return status;
+    }
+
+    detail::CacheMeta expected;
+    expected.onnxSha256 = detail::sha256Hex(onnx.data(), onnx.size());
+    expected.trtVersion = trtVersionString();
+    expected.cudaVersion = cudaVersionString();
+    auto device = queryDevice(options.deviceIndex);
+    if (!device) {
+        return device.status();
+    }
+    expected.gpuName = device.value().name;
+    expected.gpuUuid = device.value().uuid;
+    expected.precision = std::string(toString(options.precision));
+    expected.buildOptionsDigest = buildOptionsDigest(options);
+    expected.versionCompatible = options.versionCompatible;
+    expected.hardwareCompatible = options.hardwareCompatible;
+
+    const std::string stem = std::filesystem::path(onnxPath).stem().string();
+    // Relax the filename for portable engines so the relaxed sidecar check can actually
+    // find them: major-only TRT for version-compatible, a fixed token for hardware-compatible.
+    const std::string fileTrtVersion = options.versionCompatible ? std::to_string(NV_TENSORRT_MAJOR) : expected.trtVersion;
+    const std::string fileGpuUuid = options.hardwareCompatible ? std::string("hwcompat") : expected.gpuUuid;
+    const std::string fileName = detail::cacheFileName(stem, expected.onnxSha256, fileTrtVersion, fileGpuUuid, expected.precision);
+    const std::filesystem::path enginePath = std::filesystem::path(options.engineCacheDir) / fileName;
+    std::filesystem::path sidecarPath = enginePath;
+    sidecarPath += ".json";
+
+    if (std::filesystem::is_regular_file(enginePath) && std::filesystem::is_regular_file(sidecarPath)) {
+        auto meta = detail::readSidecar(sidecarPath.string());
+        // A hardware-compatible (Ampere-plus) engine must not be reused on a pre-Ampere GPU
+        // even though the UUID check is relaxed -- gate on the loading GPU's compute capability.
+        const bool hardwareFloorOk = !options.hardwareCompatible || device.value().computeMajor >= 8;
+        if (meta && hardwareFloorOk && detail::isFresh(meta.value(), expected, options.versionCompatible, options.hardwareCompatible)) {
+            return enginePath.string(); // fresh cache hit
+        }
+    }
+
+    auto engine = buildFromOnnxBytes(onnx, options);
+    if (!engine) {
+        return engine.status();
+    }
+    if (Status written = detail::writeAtomic(enginePath.string(), engine.value()); !written) {
+        return written;
+    }
+    expected.createdUnix = static_cast<long long>(std::time(nullptr));
+    if (Status written = detail::writeSidecar(sidecarPath.string(), expected); !written) {
+        return written;
+    }
+    return enginePath.string();
 }
 
 Result<std::vector<std::byte>> EngineBuilder::buildFromOnnxBytes(std::span<const std::byte> onnx, const BuildOptions &options) {

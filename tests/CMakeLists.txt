@@ -19,7 +19,10 @@ add_executable(trtcpp_core_tests
     test_shape.cpp
     test_status.cpp
     test_tensorview.cpp
-    test_logger.cpp)
+    test_logger.cpp
+    test_sha256.cpp
+    test_engine_cache.cpp)
+target_include_directories(trtcpp_core_tests PRIVATE ${CMAKE_SOURCE_DIR}/src) # internal detail headers (CPU-only)
 target_link_libraries(trtcpp_core_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api GTest::gtest_main)
 gtest_discover_tests(trtcpp_core_tests)
 

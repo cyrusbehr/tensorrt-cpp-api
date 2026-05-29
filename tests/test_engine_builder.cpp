@@ -1,8 +1,11 @@
+#include "detail/engine_cache.h"
 #include "tensorrt_cpp_api/cuda.h"
 #include "tensorrt_cpp_api/engine_builder.h"
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
 #include <span>
 #include <string>
 
@@ -84,4 +87,41 @@ TEST(EngineBuilder, CalibLegacyRejectedForNow) {
     auto engine = builder.buildFromOnnxFile(modelPath("relu_1x3x8x8.onnx"), options);
     EXPECT_FALSE(engine.ok());
     EXPECT_EQ(engine.status().code(), StatusCode::kUnsupported);
+}
+
+TEST(EngineBuilder, BuildOrLoadCacheHitMissStale) {
+    const auto dir = std::filesystem::temp_directory_path() / "trtcpp_engine_cache";
+    std::filesystem::remove_all(dir);
+
+    EngineBuilder builder;
+    BuildOptions options;
+    options.precision = Precision::kFp32;
+    options.engineCacheDir = dir.string();
+
+    // Miss -> build, engine + sidecar created.
+    auto first = builder.buildOrLoad(modelPath("relu_1x3x8x8.onnx"), options);
+    ASSERT_TRUE(first.ok()) << first.status().message();
+    ASSERT_TRUE(std::filesystem::exists(first.value()));
+    ASSERT_TRUE(std::filesystem::exists(first.value() + ".json"));
+    const auto builtTime = std::filesystem::last_write_time(first.value());
+
+    // Hit -> same path, engine file NOT rewritten.
+    auto second = builder.buildOrLoad(modelPath("relu_1x3x8x8.onnx"), options);
+    ASSERT_TRUE(second.ok());
+    EXPECT_EQ(second.value(), first.value());
+    EXPECT_EQ(std::filesystem::last_write_time(second.value()), builtTime);
+
+    // Stale -> corrupt the sidecar's ONNX hash; next call detects it and rebuilds.
+    {
+        std::ofstream sidecar(first.value() + ".json", std::ios::trunc);
+        sidecar << R"({ "onnx_sha256": "deadbeef" })";
+    }
+    auto third = builder.buildOrLoad(modelPath("relu_1x3x8x8.onnx"), options);
+    ASSERT_TRUE(third.ok());
+    EXPECT_EQ(third.value(), first.value());
+    auto meta = trtcpp::detail::readSidecar(third.value() + ".json");
+    ASSERT_TRUE(meta.ok());
+    EXPECT_NE(meta.value().onnxSha256, "deadbeef"); // sidecar was rewritten with the real hash
+
+    std::filesystem::remove_all(dir);
 }
