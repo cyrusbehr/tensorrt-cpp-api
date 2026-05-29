@@ -178,8 +178,13 @@ int deviceOfPointer(const void *ptr) {
     return attr.device;
 }
 
-// Require C-contiguous strides. CAI strides are in BYTES; nullopt/None => contiguous.
+// Require C-contiguous strides. CAI strides are in BYTES; None => contiguous. `strides` is
+// untrusted (it comes straight from a foreign object's __cuda_array_interface__), so its
+// length is validated against the shape before indexing.
 void requireContiguousBytes(const std::vector<std::int64_t> &dims, DType dtype, const std::vector<std::int64_t> &strides) {
+    if (strides.size() != dims.size()) {
+        throw py::value_error("__cuda_array_interface__ strides length does not match shape rank");
+    }
     const auto itemsize = static_cast<std::int64_t>(byteSize(dtype));
     std::int64_t expected = itemsize;
     for (int i = static_cast<int>(dims.size()) - 1; i >= 0; --i) {
@@ -217,7 +222,10 @@ TensorView viewFromDlpack(py::handle obj) {
         throw py::type_error("__dlpack__ did not return a valid 'dltensor' capsule");
     }
     auto *mt = static_cast<DLManagedTensor *>(PyCapsule_GetPointer(cap.ptr(), "dltensor"));
-    PyCapsule_SetName(cap.ptr(), "used_dltensor"); // we now own the managed tensor
+    // Standard DLPack consumer protocol: rename to "used_dltensor" so the producer's capsule
+    // destructor will NOT also invoke the deleter when `cap` is GC'd -- we are now responsible
+    // for the single deleter call below. This is what prevents a double free.
+    PyCapsule_SetName(cap.ptr(), "used_dltensor");
     const DLTensor &dt = mt->dl_tensor;
 
     const Device dev = dt.device.device_type == kDLCUDA ? Device::kCuda : Device::kHost;
@@ -289,10 +297,13 @@ struct DlpackCtx {
 void dlpackDeleter(DLManagedTensor *self) {
     auto *ctx = static_cast<DlpackCtx *>(self->manager_ctx);
     {
+        // The consumer may invoke this from a thread that does or does not hold the GIL;
+        // gil_scoped_acquire (PyGILState_Ensure) is reentrant-safe for both, and is required
+        // because dropping the py::object owner touches the Python refcount.
         py::gil_scoped_acquire gil;
-        ctx->owner = py::object(); // drop the reference under the GIL
+        ctx->owner = py::object();
     }
-    delete ctx;
+    delete ctx; // frees ctx->shape, which backed self->dl_tensor.shape for the capsule's life
     delete self;
 }
 
