@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint> // SIZE_MAX
 #include <span>
 #include <utility>
 
@@ -68,6 +69,9 @@ inline Result<std::size_t> checkedByteSize(DType dtype, const Shape &shape) {
     }
     std::size_t totalBits = 0;
     if (__builtin_mul_overflow(count, static_cast<std::size_t>(bitsPerElement(dtype)), &totalBits)) {
+        return Status{StatusCode::kInvalidArgument, "tensor byte size overflows std::size_t"};
+    }
+    if (totalBits > SIZE_MAX - 7) { // guard the round-up below from wrapping past SIZE_MAX
         return Status{StatusCode::kInvalidArgument, "tensor byte size overflows std::size_t"};
     }
     return (totalBits + 7) / 8;

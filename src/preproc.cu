@@ -43,8 +43,11 @@ __global__ void letterboxKernel(const unsigned char *src, int srcH, int srcW, in
         const int y1 = min(y0 + 1, srcH - 1);
         x0 = max(0, min(x0, srcW - 1));
         y0 = max(0, min(y0, srcH - 1));
-        int ic = (swapRB && channels == 3) ? (2 - oc) : oc;
-        ic = min(ic, channels - 1);
+        // BGR<->RGB swap only applies to the first 3 channels; for an output channel >= 3 (or a
+        // non-3-channel source) keep identity. Clamp to [0, channels-1] so a swapped index can
+        // never go negative or out of bounds (e.g. oc>=3 would make 2-oc negative).
+        int ic = (swapRB && channels == 3 && oc < 3) ? (2 - oc) : oc;
+        ic = max(0, min(ic, channels - 1));
         const float p00 = src[(y0 * srcW + x0) * channels + ic];
         const float p01 = src[(y0 * srcW + x1) * channels + ic];
         const float p10 = src[(y1 * srcW + x0) * channels + ic];
@@ -118,7 +121,14 @@ Status letterboxToTensor(TensorView src, TensorView dst, const PreprocSpec &spec
         norm.scale[i] = spec.scale[static_cast<std::size_t>(i)];
     }
 
-    const int total = outC * outH * outW;
+    // Guard the element count against 32-bit overflow: both the grid size here and the kernel's
+    // internal flat index are int, so an outC*outH*outW exceeding INT_MAX would silently launch
+    // zero blocks (leaving the output unwritten). Reject it cleanly instead.
+    const long long total64 = static_cast<long long>(outC) * outH * outW;
+    if (total64 > 2147483647LL) {
+        return Status{StatusCode::kInvalidArgument, "letterboxToTensor output tensor has too many elements (> INT_MAX)"};
+    }
+    const int total = static_cast<int>(total64);
     const int blockSize = 256;
     const int gridSize = (total + blockSize - 1) / blockSize;
     const auto *srcPtr = static_cast<const unsigned char *>(src.data());
