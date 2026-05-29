@@ -35,6 +35,10 @@ find_package(CUDAToolkit REQUIRED)
 # -DTensorRT_DIR=<root> for a tarball install.
 find_package(TensorRT REQUIRED)
 
+# Threads: the logger and EnginePool use std::mutex/condition_variable. Linked PRIVATE
+# (PImpl, so no thread types in public headers); the package config re-resolves it.
+find_package(Threads REQUIRED)
+
 # Generate build_config.h recording the library + TensorRT versions, so public headers can
 # version-gate (e.g. the legacy calibrator) without including a TensorRT header.
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_config.h.in
@@ -61,11 +65,13 @@ target_sources(tensorrt_cpp_api PRIVATE
 target_include_directories(tensorrt_cpp_api PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(tensorrt_cpp_api
     PUBLIC CUDA::cudart
-    PRIVATE TensorRT::TensorRT)
+    PRIVATE TensorRT::TensorRT Threads::Threads)
+# Build-tree include roots only. The install-tree include dir is supplied once by the
+# INCLUDES DESTINATION of install(TARGETS) below (both the public headers and the generated
+# build_config.h land under the same <prefix>/include tree), so no $<INSTALL_INTERFACE> here.
 target_include_directories(tensorrt_cpp_api PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
-    $<INSTALL_INTERFACE:include>)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>)
 target_compile_features(tensorrt_cpp_api PUBLIC cxx_std_20)
 set_target_properties(tensorrt_cpp_api PROPERTIES
     CXX_EXTENSIONS OFF
