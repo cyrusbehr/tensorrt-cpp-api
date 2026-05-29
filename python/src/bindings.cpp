@@ -443,8 +443,9 @@ PYBIND11_MODULE(_core, m) {
     // ---- Stream ----
     py::class_<Stream>(m, "Stream")
         .def(py::init([]() { return unwrap(Stream::create()); }), "Create and own a new non-blocking CUDA stream.")
-        .def_static("wrap", [](std::uintptr_t handle) { return Stream::wrap(handle); }, py::arg("handle"),
-                    "Wrap an existing stream handle (e.g. torch.cuda.Stream.cuda_stream); non-owning.")
+        .def_static(
+            "wrap", [](std::uintptr_t handle) { return Stream::wrap(handle); }, py::arg("handle"),
+            "Wrap an existing stream handle (e.g. torch.cuda.Stream.cuda_stream); non-owning.")
         .def_property_readonly("handle", &Stream::raw, "The raw stream handle as an integer.")
         .def_property_readonly("owns", &Stream::owns)
         .def("synchronize", [](const Stream &s) { check(s.synchronize()); });
@@ -458,41 +459,50 @@ PYBIND11_MODULE(_core, m) {
         .def_readonly("compute_minor", &DeviceInfo::computeMinor)
         .def_readonly("total_memory_bytes", &DeviceInfo::totalMemoryBytes)
         .def("__repr__", [](const DeviceInfo &d) {
-            return "DeviceInfo(index=" + std::to_string(d.index) + ", name='" + d.name + "', sm=" + std::to_string(d.computeMajor) +
-                   "." + std::to_string(d.computeMinor) + ")";
+            return "DeviceInfo(index=" + std::to_string(d.index) + ", name='" + d.name + "', sm=" + std::to_string(d.computeMajor) + "." +
+                   std::to_string(d.computeMinor) + ")";
         });
     m.def("device_count", []() { return unwrap(deviceCount()); });
-    m.def("query_device", [](int index) { return unwrap(queryDevice(index)); }, py::arg("index"));
+    m.def(
+        "query_device", [](int index) { return unwrap(queryDevice(index)); }, py::arg("index"));
 
     // ---- Tensor (owning) ----
     py::class_<Tensor>(m, "Tensor")
-        .def_static("allocate", [](DType dtype, const Shape &shape, Device device,
-                                   int deviceId) { return unwrap(Tensor::allocate(dtype, shape, device, deviceId)); },
-                    py::arg("dtype"), py::arg("shape"), py::arg("device"), py::arg("device_id") = 0)
+        .def_static(
+            "allocate",
+            [](DType dtype, const Shape &shape, Device device, int deviceId) {
+                return unwrap(Tensor::allocate(dtype, shape, device, deviceId));
+            },
+            py::arg("dtype"), py::arg("shape"), py::arg("device"), py::arg("device_id") = 0)
         .def_property_readonly("dtype", &Tensor::dtype)
         .def_property_readonly("shape", &Tensor::shape)
         .def_property_readonly("device", &Tensor::device)
         .def_property_readonly("device_id", &Tensor::deviceId)
         .def_property_readonly("nbytes", &Tensor::nbytes)
         .def_property_readonly("data_ptr", [](const Tensor &t) { return reinterpret_cast<std::uintptr_t>(t.data()); })
-        .def("copy_from", [](Tensor &t, py::handle src, const Stream &s) { check(t.copyFrom(toTensorView(src), s)); }, py::arg("src"),
-             py::arg("stream"))
-        .def("to", [](const Tensor &t, Device d, int deviceId, const Stream &s) { return unwrap(t.to(d, deviceId, s)); },
-             py::arg("device"), py::arg("device_id"), py::arg("stream"))
-        .def("to_host", [](const Tensor &t, const Stream &s) { return unwrap(t.toHost(s)); }, py::arg("stream"),
-             "Copy to a pinned host Tensor AND synchronize the stream; the result is immediately readable.")
+        .def(
+            "copy_from", [](Tensor &t, py::handle src, const Stream &s) { check(t.copyFrom(toTensorView(src), s)); }, py::arg("src"),
+            py::arg("stream"))
+        .def(
+            "to", [](const Tensor &t, Device d, int deviceId, const Stream &s) { return unwrap(t.to(d, deviceId, s)); }, py::arg("device"),
+            py::arg("device_id"), py::arg("stream"))
+        .def(
+            "to_host", [](const Tensor &t, const Stream &s) { return unwrap(t.toHost(s)); }, py::arg("stream"),
+            "Copy to a pinned host Tensor AND synchronize the stream; the result is immediately readable.")
         .def_property_readonly("__cuda_array_interface__", &cudaArrayInterface)
         .def_property_readonly("__array_interface__", &arrayInterface)
-        .def("__dlpack__", [](py::object self, py::object /*stream*/) { return tensorDlpack(std::move(self)); },
-             py::arg("stream") = py::none())
+        .def(
+            "__dlpack__", [](py::object self, py::object /*stream*/) { return tensorDlpack(std::move(self)); },
+            py::arg("stream") = py::none())
         .def("__dlpack_device__", [](const Tensor &t) {
             return py::make_tuple(static_cast<int>(t.device() == Device::kCuda ? kDLCUDA : kDLCPU), t.deviceId());
         });
 
     // ---- TensorView (non-owning) ----
     py::class_<TensorView>(m, "TensorView")
-        .def_static("from_array", [](py::handle obj) { return toTensorView(obj); }, py::arg("array"),
-                    "Build a zero-copy view over an object exposing __cuda_array_interface__ or __dlpack__.")
+        .def_static(
+            "from_array", [](py::handle obj) { return toTensorView(obj); }, py::arg("array"),
+            "Build a zero-copy view over an object exposing __cuda_array_interface__ or __dlpack__.")
         .def_property_readonly("dtype", &TensorView::dtype)
         .def_property_readonly("shape", &TensorView::shape)
         .def_property_readonly("device", &TensorView::device)
@@ -539,178 +549,195 @@ PYBIND11_MODULE(_core, m) {
     // ---- EngineBuilder ----
     py::class_<EngineBuilder>(m, "EngineBuilder")
         .def(py::init<>())
-        .def("build_from_onnx_file",
-             [](EngineBuilder &b, const std::string &path, const BuildOptions &opts) {
-                 std::optional<Result<std::vector<std::byte>>> r;
-                 {
-                     py::gil_scoped_release rel;
-                     r.emplace(b.buildFromOnnxFile(path, opts));
-                 }
-                 auto bytes = unwrap(std::move(*r));
-                 return py::bytes(reinterpret_cast<const char *>(bytes.data()), bytes.size());
-             },
-             py::arg("onnx_path"), py::arg("options"))
-        .def("build_or_load",
-             [](EngineBuilder &b, const std::string &path, const BuildOptions &opts) {
-                 std::optional<Result<std::string>> r;
-                 {
-                     py::gil_scoped_release rel;
-                     r.emplace(b.buildOrLoad(path, opts));
-                 }
-                 return unwrap(std::move(*r));
-             },
-             py::arg("onnx_path"), py::arg("options"))
-        .def("build_and_load",
-             [](EngineBuilder &b, const std::string &path, const BuildOptions &opts, const EngineOptions &eopts) {
-                 std::optional<Result<Engine>> r;
-                 {
-                     py::gil_scoped_release rel;
-                     r.emplace(b.buildAndLoad(path, opts, eopts));
-                 }
-                 return unwrap(std::move(*r));
-             },
-             py::arg("onnx_path"), py::arg("options"), py::arg("engine_options") = EngineOptions{});
+        .def(
+            "build_from_onnx_file",
+            [](EngineBuilder &b, const std::string &path, const BuildOptions &opts) {
+                std::optional<Result<std::vector<std::byte>>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(b.buildFromOnnxFile(path, opts));
+                }
+                auto bytes = unwrap(std::move(*r));
+                return py::bytes(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+            },
+            py::arg("onnx_path"), py::arg("options"))
+        .def(
+            "build_or_load",
+            [](EngineBuilder &b, const std::string &path, const BuildOptions &opts) {
+                std::optional<Result<std::string>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(b.buildOrLoad(path, opts));
+                }
+                return unwrap(std::move(*r));
+            },
+            py::arg("onnx_path"), py::arg("options"))
+        .def(
+            "build_and_load",
+            [](EngineBuilder &b, const std::string &path, const BuildOptions &opts, const EngineOptions &eopts) {
+                std::optional<Result<Engine>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(b.buildAndLoad(path, opts, eopts));
+                }
+                return unwrap(std::move(*r));
+            },
+            py::arg("onnx_path"), py::arg("options"), py::arg("engine_options") = EngineOptions{});
 
     // ---- Engine ----
     py::class_<Engine>(m, "Engine")
-        .def_static("load_from_file",
-                    [](const std::string &path, const EngineOptions &opts) {
-                        std::optional<Result<Engine>> r;
-                        {
-                            py::gil_scoped_release rel;
-                            r.emplace(Engine::loadFromFile(path, opts));
-                        }
-                        return unwrap(std::move(*r));
-                    },
-                    py::arg("engine_path"), py::arg("options") = EngineOptions{})
-        .def_static("load_from_memory",
-                    [](py::bytes data, const EngineOptions &opts) {
-                        char *buf = nullptr;
-                        ssize_t len = 0;
-                        PYBIND11_BYTES_AS_STRING_AND_SIZE(data.ptr(), &buf, &len);
-                        std::span<const std::byte> span(reinterpret_cast<const std::byte *>(buf), static_cast<std::size_t>(len));
-                        std::optional<Result<Engine>> r;
-                        {
-                            py::gil_scoped_release rel;
-                            r.emplace(Engine::loadFromMemory(span, opts));
-                        }
-                        return unwrap(std::move(*r));
-                    },
-                    py::arg("engine_data"), py::arg("options") = EngineOptions{})
+        .def_static(
+            "load_from_file",
+            [](const std::string &path, const EngineOptions &opts) {
+                std::optional<Result<Engine>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(Engine::loadFromFile(path, opts));
+                }
+                return unwrap(std::move(*r));
+            },
+            py::arg("engine_path"), py::arg("options") = EngineOptions{})
+        .def_static(
+            "load_from_memory",
+            [](py::bytes data, const EngineOptions &opts) {
+                char *buf = nullptr;
+                ssize_t len = 0;
+                PYBIND11_BYTES_AS_STRING_AND_SIZE(data.ptr(), &buf, &len);
+                std::span<const std::byte> span(reinterpret_cast<const std::byte *>(buf), static_cast<std::size_t>(len));
+                std::optional<Result<Engine>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(Engine::loadFromMemory(span, opts));
+                }
+                return unwrap(std::move(*r));
+            },
+            py::arg("engine_data"), py::arg("options") = EngineOptions{})
         .def("tensors", &Engine::tensors)
         .def("input_names", &Engine::inputNames)
         .def("output_names", &Engine::outputNames)
         .def("nb_optimization_profiles", &Engine::nbOptimizationProfiles)
-        .def("tensor_shape", [](const Engine &e, const std::string &n) { return unwrap(e.tensorShape(n)); }, py::arg("name"))
-        .def("tensor_dtype", [](const Engine &e, const std::string &n) { return unwrap(e.tensorDType(n)); }, py::arg("name"))
-        .def("enqueue",
-             [](Engine &e, const py::dict &inputs, const py::dict &outputs, const Stream &s, int profile) {
-                 auto in = toViewMap(inputs);
-                 auto out = toViewMap(outputs);
-                 Status st;
-                 {
-                     py::gil_scoped_release rel;
-                     st = e.enqueue(in, out, s, profile);
-                 }
-                 check(st);
-             },
-             py::arg("inputs"), py::arg("outputs"), py::arg("stream"), py::arg("profile_index") = 0)
-        .def("infer",
-             [](Engine &e, const py::dict &inputs, const Stream &s, int profile) {
-                 auto in = toViewMap(inputs);
-                 std::optional<Result<std::unordered_map<std::string, Tensor>>> r;
-                 {
-                     py::gil_scoped_release rel;
-                     r.emplace(e.infer(in, s, profile));
-                 }
-                 return tensorMapToDict(unwrap(std::move(*r)));
-             },
-             py::arg("inputs"), py::arg("stream"), py::arg("profile_index") = 0)
-        .def("infer_single",
-             [](Engine &e, const py::dict &inputs, const Stream &s, int profile) {
-                 auto in = toViewMap(inputs);
-                 std::optional<Result<Tensor>> r;
-                 {
-                     py::gil_scoped_release rel;
-                     r.emplace(e.inferSingle(in, s, profile));
-                 }
-                 return unwrap(std::move(*r));
-             },
-             py::arg("inputs"), py::arg("stream"), py::arg("profile_index") = 0)
-        .def("output_shapes",
-             [](Engine &e, const py::dict &inputs, int profile) {
-                 auto in = toViewMap(inputs);
-                 return unwrap(e.outputShapes(in, profile));
-             },
-             py::arg("inputs"), py::arg("profile_index") = 0);
+        .def(
+            "tensor_shape", [](const Engine &e, const std::string &n) { return unwrap(e.tensorShape(n)); }, py::arg("name"))
+        .def(
+            "tensor_dtype", [](const Engine &e, const std::string &n) { return unwrap(e.tensorDType(n)); }, py::arg("name"))
+        .def(
+            "enqueue",
+            [](Engine &e, const py::dict &inputs, const py::dict &outputs, const Stream &s, int profile) {
+                auto in = toViewMap(inputs);
+                auto out = toViewMap(outputs);
+                Status st;
+                {
+                    py::gil_scoped_release rel;
+                    st = e.enqueue(in, out, s, profile);
+                }
+                check(st);
+            },
+            py::arg("inputs"), py::arg("outputs"), py::arg("stream"), py::arg("profile_index") = 0)
+        .def(
+            "infer",
+            [](Engine &e, const py::dict &inputs, const Stream &s, int profile) {
+                auto in = toViewMap(inputs);
+                std::optional<Result<std::unordered_map<std::string, Tensor>>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(e.infer(in, s, profile));
+                }
+                return tensorMapToDict(unwrap(std::move(*r)));
+            },
+            py::arg("inputs"), py::arg("stream"), py::arg("profile_index") = 0)
+        .def(
+            "infer_single",
+            [](Engine &e, const py::dict &inputs, const Stream &s, int profile) {
+                auto in = toViewMap(inputs);
+                std::optional<Result<Tensor>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(e.inferSingle(in, s, profile));
+                }
+                return unwrap(std::move(*r));
+            },
+            py::arg("inputs"), py::arg("stream"), py::arg("profile_index") = 0)
+        .def(
+            "output_shapes",
+            [](Engine &e, const py::dict &inputs, int profile) {
+                auto in = toViewMap(inputs);
+                return unwrap(e.outputShapes(in, profile));
+            },
+            py::arg("inputs"), py::arg("profile_index") = 0);
 
     // ---- EnginePool + Lease ----
     py::class_<EnginePool::Lease>(m, "Lease")
         .def_property_readonly("valid", &EnginePool::Lease::valid)
         .def_property_readonly("profile_index", &EnginePool::Lease::profileIndex)
-        .def("enqueue",
-             [](EnginePool::Lease &l, const py::dict &inputs, const py::dict &outputs, const Stream &s) {
-                 auto in = toViewMap(inputs);
-                 auto out = toViewMap(outputs);
-                 Status st;
-                 {
-                     py::gil_scoped_release rel;
-                     st = l.enqueue(in, out, s);
-                 }
-                 check(st);
-             },
-             py::arg("inputs"), py::arg("outputs"), py::arg("stream"))
-        .def("infer",
-             [](EnginePool::Lease &l, const py::dict &inputs, const Stream &s) {
-                 auto in = toViewMap(inputs);
-                 std::optional<Result<std::unordered_map<std::string, Tensor>>> r;
-                 {
-                     py::gil_scoped_release rel;
-                     r.emplace(l.infer(in, s));
-                 }
-                 return tensorMapToDict(unwrap(std::move(*r)));
-             },
-             py::arg("inputs"), py::arg("stream"))
-        .def("infer_single",
-             [](EnginePool::Lease &l, const py::dict &inputs, const Stream &s) {
-                 auto in = toViewMap(inputs);
-                 std::optional<Result<Tensor>> r;
-                 {
-                     py::gil_scoped_release rel;
-                     r.emplace(l.inferSingle(in, s));
-                 }
-                 return unwrap(std::move(*r));
-             },
-             py::arg("inputs"), py::arg("stream"));
+        .def(
+            "enqueue",
+            [](EnginePool::Lease &l, const py::dict &inputs, const py::dict &outputs, const Stream &s) {
+                auto in = toViewMap(inputs);
+                auto out = toViewMap(outputs);
+                Status st;
+                {
+                    py::gil_scoped_release rel;
+                    st = l.enqueue(in, out, s);
+                }
+                check(st);
+            },
+            py::arg("inputs"), py::arg("outputs"), py::arg("stream"))
+        .def(
+            "infer",
+            [](EnginePool::Lease &l, const py::dict &inputs, const Stream &s) {
+                auto in = toViewMap(inputs);
+                std::optional<Result<std::unordered_map<std::string, Tensor>>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(l.infer(in, s));
+                }
+                return tensorMapToDict(unwrap(std::move(*r)));
+            },
+            py::arg("inputs"), py::arg("stream"))
+        .def(
+            "infer_single",
+            [](EnginePool::Lease &l, const py::dict &inputs, const Stream &s) {
+                auto in = toViewMap(inputs);
+                std::optional<Result<Tensor>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(l.inferSingle(in, s));
+                }
+                return unwrap(std::move(*r));
+            },
+            py::arg("inputs"), py::arg("stream"));
 
     py::class_<EnginePool>(m, "EnginePool")
-        .def_static("create",
-                    [](const std::string &path, int contexts, const EngineOptions &opts) {
-                        std::optional<Result<EnginePool>> r;
-                        {
-                            py::gil_scoped_release rel;
-                            r.emplace(EnginePool::create(path, contexts, opts));
-                        }
-                        return unwrap(std::move(*r));
-                    },
-                    py::arg("engine_path"), py::arg("contexts"), py::arg("options") = EngineOptions{})
-        .def("acquire",
-             [](EnginePool &p) {
-                 std::optional<Result<EnginePool::Lease>> r;
-                 {
-                     py::gil_scoped_release rel;
-                     r.emplace(p.acquire());
+        .def_static(
+            "create",
+            [](const std::string &path, int contexts, const EngineOptions &opts) {
+                std::optional<Result<EnginePool>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(EnginePool::create(path, contexts, opts));
+                }
+                return unwrap(std::move(*r));
+            },
+            py::arg("engine_path"), py::arg("contexts"), py::arg("options") = EngineOptions{})
+        .def(
+            "acquire",
+            [](EnginePool &p) {
+                std::optional<Result<EnginePool::Lease>> r;
+                {
+                    py::gil_scoped_release rel;
+                    r.emplace(p.acquire());
+                }
+                return unwrap(std::move(*r));
+            },
+            "Block until a context is free, then return a Lease.")
+        .def("try_acquire",
+             [](EnginePool &p) -> py::object {
+                 auto lease = p.tryAcquire();
+                 if (!lease) {
+                     return py::none();
                  }
-                 return unwrap(std::move(*r));
-             },
-             "Block until a context is free, then return a Lease.")
-        .def("try_acquire", [](EnginePool &p) -> py::object {
-            auto lease = p.tryAcquire();
-            if (!lease) {
-                return py::none();
-            }
-            return py::cast(std::move(*lease));
-        })
+                 return py::cast(std::move(*lease));
+             })
         .def("size", &EnginePool::size)
         .def("tensors", &EnginePool::tensors)
         .def("input_names", &EnginePool::inputNames)
@@ -733,17 +760,18 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("swap_rb", &preproc::PreprocSpec::swapRB)
         .def_readwrite("keep_aspect_ratio_pad", &preproc::PreprocSpec::keepAspectRatioPad)
         .def_readwrite("pad_value", &preproc::PreprocSpec::padValue);
-    pre.def("letterbox_to_tensor",
-            [](py::handle src, py::handle dst, const preproc::PreprocSpec &spec, const Stream &s) {
-                auto srcView = toTensorView(src);
-                auto dstView = toTensorView(dst);
-                Status st;
-                {
-                    py::gil_scoped_release rel;
-                    st = preproc::letterboxToTensor(srcView, dstView, spec, s);
-                }
-                check(st);
-            },
-            py::arg("src"), py::arg("dst"), py::arg("spec"), py::arg("stream"));
+    pre.def(
+        "letterbox_to_tensor",
+        [](py::handle src, py::handle dst, const preproc::PreprocSpec &spec, const Stream &s) {
+            auto srcView = toTensorView(src);
+            auto dstView = toTensorView(dst);
+            Status st;
+            {
+                py::gil_scoped_release rel;
+                st = preproc::letterboxToTensor(srcView, dstView, spec, s);
+            }
+            check(st);
+        },
+        py::arg("src"), py::arg("dst"), py::arg("spec"), py::arg("stream"));
 #endif
 }

@@ -72,7 +72,7 @@ inline trtcpp::Result<trtcpp::Tensor> uploadHWC(const Image &img, const trtcpp::
 /// mean = 255*imagenet_mean and scale = 1/(255*imagenet_std), in RGB channel order.
 inline trtcpp::preproc::PreprocSpec imagenetSpec() {
     trtcpp::preproc::PreprocSpec spec;
-    spec.swapRB = false; // stb already gives RGB
+    spec.swapRB = false;             // stb already gives RGB
     spec.keepAspectRatioPad = false; // plain resize to the square input
     spec.mean = {0.485f * 255.f, 0.456f * 255.f, 0.406f * 255.f, 0.f};
     spec.scale = {1.f / (0.229f * 255.f), 1.f / (0.224f * 255.f), 1.f / (0.225f * 255.f), 1.f};

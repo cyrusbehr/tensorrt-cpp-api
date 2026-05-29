@@ -1,0 +1,55 @@
+name: format
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format-18
+      - name: Check formatting (library + examples; excludes vendored stb)
+        run: |
+          files=$(git ls-files '*.h' '*.hpp' '*.cpp' '*.cu' \
+            | grep -vE '(^|/)stb_image(_write)?\.h$')
+          echo "$files"
+          clang-format-18 --dry-run --Werror $files
+
+  clang-tidy:
+    name: clang-tidy (changed files)
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install toolchain
+        run: |
+          set -eux
+          sudo apt-get update && sudo apt-get install -y clang-tidy-18
+          wget -qO cuda-keyring.deb \
+            "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb"
+          sudo dpkg -i cuda-keyring.deb
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cuda-cudart-dev-12-6 cuda-nvcc-12-6 libnvinfer-dev libnvonnxparsers-dev
+      - name: Configure (export compile_commands.json)
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DTRT_CPP_API_BUILD_TESTS=ON \
+            -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc
+      - name: clang-tidy on changed C/C++ files
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          changed=$(git diff --name-only "$base"...HEAD \
+            | grep -E '\.(c|cc|cpp|h|hpp)$' \
+            | grep -vE '(^|/)stb_image(_write)?\.h$' \
+            | grep -vE '\.cu$' || true)
+          if [ -z "$changed" ]; then echo "no C/C++ changes"; exit 0; fi
+          echo "$changed"
+          clang-tidy-18 -p build $changed

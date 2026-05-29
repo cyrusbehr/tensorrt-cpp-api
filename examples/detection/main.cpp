@@ -25,13 +25,18 @@ constexpr int kInput = 640;
 constexpr int kNumClasses = 80;
 
 const std::array<const char *, kNumClasses> kCoco = {
-    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant",
-    "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe",
-    "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat",
-    "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl",
-    "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-    "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave",
-    "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"};
+    "person",         "bicycle",    "car",           "motorcycle",    "airplane",     "bus",           "train",
+    "truck",          "boat",       "traffic light", "fire hydrant",  "stop sign",    "parking meter", "bench",
+    "bird",           "cat",        "dog",           "horse",         "sheep",        "cow",           "elephant",
+    "bear",           "zebra",      "giraffe",       "backpack",      "umbrella",     "handbag",       "tie",
+    "suitcase",       "frisbee",    "skis",          "snowboard",     "sports ball",  "kite",          "baseball bat",
+    "baseball glove", "skateboard", "surfboard",     "tennis racket", "bottle",       "wine glass",    "cup",
+    "fork",           "knife",      "spoon",         "bowl",          "banana",       "apple",         "sandwich",
+    "orange",         "broccoli",   "carrot",        "hot dog",       "pizza",        "donut",         "cake",
+    "chair",          "couch",      "potted plant",  "bed",           "dining table", "toilet",        "tv",
+    "laptop",         "mouse",      "remote",        "keyboard",      "cell phone",   "microwave",     "oven",
+    "toaster",        "sink",       "refrigerator",  "book",          "clock",        "vase",          "scissors",
+    "teddy bear",     "hair drier", "toothbrush"};
 
 struct Detection {
     int x0, y0, x1, y1;
@@ -135,8 +140,8 @@ int main(int argc, char **argv) {
         const float cx = data[0 * nAnchors + a], cy = data[1 * nAnchors + a];
         const float w = data[2 * nAnchors + a], h = data[3 * nAnchors + a];
         // 640-input pixels -> original pixels (letterbox is top-left aligned, pad right/bottom)
-        dets.push_back({static_cast<int>((cx - w / 2) / r), static_cast<int>((cy - h / 2) / r),
-                        static_cast<int>((cx + w / 2) / r), static_cast<int>((cy + h / 2) / r), bestScore, bestCls});
+        dets.push_back({static_cast<int>((cx - w / 2) / r), static_cast<int>((cy - h / 2) / r), static_cast<int>((cx + w / 2) / r),
+                        static_cast<int>((cy + h / 2) / r), bestScore, bestCls});
     }
 
     const auto kept = nms(std::move(dets), 0.45f);

@@ -1,6 +1,23 @@
+# Run `pre-commit install` once; hooks then run on `git commit`.
+# Vendored third-party single-header libs (stb) are excluded from formatting.
+exclude: '(^|/)stb_image(_write)?\.h$'
+
 repos:
-- repo: https://github.com/pre-commit/mirrors-clang-format
-  rev: 'v17.0.3'  # Use the sha / tag you want to point at
-  hooks:
-  - id: clang-format
-    types_or: [c++, c, cuda]
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: 'v18.1.8'
+    hooks:
+      - id: clang-format
+        types_or: [c++, c, cuda]
+
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: mixed-line-ending

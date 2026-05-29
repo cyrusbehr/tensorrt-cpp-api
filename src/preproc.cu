@@ -8,16 +8,9 @@
 namespace trtcpp::preproc {
 namespace {
 
-template <typename T>
-__device__ T toOut(float x);
-template <>
-__device__ float toOut<float>(float x) {
-    return x;
-}
-template <>
-__device__ __half toOut<__half>(float x) {
-    return __float2half(x);
-}
+template <typename T> __device__ T toOut(float x);
+template <> __device__ float toOut<float>(float x) { return x; }
+template <> __device__ __half toOut<__half>(float x) { return __float2half(x); }
 
 struct Norm {
     float mean[4];
@@ -131,9 +124,9 @@ Status letterboxToTensor(TensorView src, TensorView dst, const PreprocSpec &spec
     const auto *srcPtr = static_cast<const unsigned char *>(src.data());
 
     if (dst.dtype() == DType::kFloat32) {
-        letterboxKernel<float><<<gridSize, blockSize, 0, stream.handle()>>>(srcPtr, srcH, srcW, channels,
-                                                                            static_cast<float *>(dst.data()), outC, outH, outW, newW,
-                                                                            newH, invScaleX, invScaleY, norm, spec.swapRB, spec.padValue);
+        letterboxKernel<float><<<gridSize, blockSize, 0, stream.handle()>>>(srcPtr, srcH, srcW, channels, static_cast<float *>(dst.data()),
+                                                                            outC, outH, outW, newW, newH, invScaleX, invScaleY, norm,
+                                                                            spec.swapRB, spec.padValue);
     } else {
         letterboxKernel<__half><<<gridSize, blockSize, 0, stream.handle()>>>(srcPtr, srcH, srcW, channels,
                                                                              static_cast<__half *>(dst.data()), outC, outH, outW, newW,

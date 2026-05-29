@@ -1,0 +1,32 @@
+# Curated, pragmatic check set for a modern C++20 library. The goal is to catch real defects
+# (bugprone-*, the static analyzer, performance traps) without the noise that makes a tidy run
+# something people learn to ignore. Not run as -warnings-as-errors in CI; it reports on changed
+# files (see .github/workflows/format.yml).
+Checks: >
+  bugprone-*,
+  performance-*,
+  portability-*,
+  clang-analyzer-*,
+  misc-*,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-using,
+  modernize-use-emplace,
+  modernize-make-unique,
+  modernize-loop-convert,
+  readability-braces-around-statements,
+  readability-redundant-member-init,
+  readability-misleading-indentation,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  -bugprone-narrowing-conversions,
+  -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
+  -misc-include-cleaner,
+  -performance-avoid-endl,
+  -clang-analyzer-optin.core.EnumCastOutOfRange
+
+# Library headers + sources only; never third-party (stb, gtest, pybind11) or generated headers.
+HeaderFilterRegex: '(include/tensorrt_cpp_api|src)/[^/]*\.(h|hpp)$'
+WarningsAsErrors: ''
+FormatStyle: file
