@@ -42,3 +42,11 @@ cmake-build-*
 
 # Keep the tiny committed test fixtures (override the global *.onnx ignore)
 !tests/models/*.onnx
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+wheelhouse/

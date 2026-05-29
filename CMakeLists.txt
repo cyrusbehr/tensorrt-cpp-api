@@ -15,6 +15,18 @@ option(TRT_CPP_API_WITH_SPDLOG    "Build the optional spdlog logger adapter"    
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+# The Python extension is a shared module that links the (static) core library, so the core
+# must be position-independent. Set it globally when building the bindings.
+if(TRT_CPP_API_BUILD_PYTHON)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
+# Enable CTest at the top level so tests registered in subdirectories (tests/, python/) are
+# discoverable. Called early -- before add_subdirectory(python) registers the binding test.
+if(TRT_CPP_API_BUILD_TESTS)
+    enable_testing()
+endif()
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
@@ -123,7 +135,16 @@ if(TRT_CPP_API_BUILD_PREPROC)
         SOVERSION ${PROJECT_VERSION_MAJOR})
 endif()
 
+# Python bindings (E15). Added after the core/preproc targets exist so the extension can link
+# them. The subdirectory builds trtcpp._core.
+if(TRT_CPP_API_BUILD_PYTHON)
+    add_subdirectory(python)
+endif()
+
 # ---- install / export (find_package(tensorrt_cpp_api) consumable) ----
+# Skipped under scikit-build-core (SKBUILD): a Python wheel must contain only the Python package
+# and the compiled extension, not the C++ dev headers / static libs / CMake package config.
+if(NOT SKBUILD)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 set(TRTCPP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_LIBDIR}/cmake/tensorrt_cpp_api)
@@ -156,8 +177,8 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config-version.cmake
     DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
+endif() # NOT SKBUILD
 
 if(TRT_CPP_API_BUILD_TESTS)
-    enable_testing()
     add_subdirectory(tests)
 endif()
