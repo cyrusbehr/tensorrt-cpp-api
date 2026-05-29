@@ -60,7 +60,7 @@ std::string_view toString(DType t) noexcept;
 /// Maps a C++ scalar type to its DType so typed accessors can dtype-check. Left
 /// undefined for unsupported T (using as<T>() with an unsupported T is a compile error).
 /// fp16/bf16/fp8 have no portable dep-free C++ scalar; their specializations arrive with
-/// the CUDA layer (E3).
+/// the buffer/interop layer that needs them (E5+), in a CUDA-including header.
 template <class T> struct DTypeOf;
 template <> struct DTypeOf<float> {
     static constexpr DType value = DType::kFloat32;

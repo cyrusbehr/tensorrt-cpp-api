@@ -11,6 +11,9 @@ if(NOT GTest_FOUND)
     FetchContent_MakeAvailable(googletest)
 endif()
 
+include(GoogleTest)
+
+# CPU-only unit tests (no GPU required).
 add_executable(trtcpp_core_tests
     test_dtype.cpp
     test_shape.cpp
@@ -18,6 +21,11 @@ add_executable(trtcpp_core_tests
     test_tensorview.cpp
     test_logger.cpp)
 target_link_libraries(trtcpp_core_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api GTest::gtest_main)
-
-include(GoogleTest)
 gtest_discover_tests(trtcpp_core_tests)
+
+# GPU-required integration tests, labeled "gpu" so CI can exclude them (ctest -LE gpu).
+add_executable(trtcpp_cuda_tests
+    test_cuda.cpp
+    test_device_tensor.cpp)
+target_link_libraries(trtcpp_cuda_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api GTest::gtest_main)
+gtest_discover_tests(trtcpp_cuda_tests PROPERTIES LABELS "gpu")

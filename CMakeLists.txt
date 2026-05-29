@@ -23,11 +23,20 @@ if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
 endif()
 
+# CUDA runtime: a hard dependency of the engine core (streams, allocation, Tensor cross
+# the public API). Plain C++ against the CUDA runtime API -- nvcc is only needed later for
+# the E11 preprocessing kernels (.cu), at which point CUDA is enabled as a language.
+find_package(CUDAToolkit REQUIRED)
+
 add_library(tensorrt_cpp_api)
 add_library(tensorrt_cpp_api::tensorrt_cpp_api ALIAS tensorrt_cpp_api)
 target_sources(tensorrt_cpp_api PRIVATE
     src/core.cpp
-    src/logger.cpp)
+    src/logger.cpp
+    src/cuda.cpp
+    src/allocator.cpp
+    src/device_tensor.cpp)
+target_link_libraries(tensorrt_cpp_api PUBLIC CUDA::cudart)
 target_include_directories(tensorrt_cpp_api PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)

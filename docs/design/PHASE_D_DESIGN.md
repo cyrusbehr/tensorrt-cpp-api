@@ -50,7 +50,9 @@ the optional ones):
 include/tensorrt_cpp_api/
   dtype.h        layout.h      shape.h        status.h      tensor.h      # E1 core types (no CUDA)
   logger.h                                                               # E2 ILogger
-  cuda.h         device.h      allocator.h                               # E3 stream/device/alloc (CUDA, no TRT)
+  cuda.h         allocator.h   device_tensor.h                           # E3 stream/device-query/alloc + owning Tensor (CUDA)
+                                                                          #   (Device query folded into cuda.h, no separate device.h;
+                                                                          #    owning Tensor split here to keep tensor.h dependency-free)
   build_options.h  quant.h     engine_builder.h                          # E6 build
   engine.h       engine_pool.h                                           # E8/E9 runtime
   calibrator.h                                                            # E10 (gated < TRT 11)
