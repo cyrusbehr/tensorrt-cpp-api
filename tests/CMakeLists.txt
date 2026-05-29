@@ -15,7 +15,8 @@ add_executable(trtcpp_core_tests
     test_dtype.cpp
     test_shape.cpp
     test_status.cpp
-    test_tensorview.cpp)
+    test_tensorview.cpp
+    test_logger.cpp)
 target_link_libraries(trtcpp_core_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api GTest::gtest_main)
 
 include(GoogleTest)

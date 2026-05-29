@@ -25,7 +25,9 @@ endif()
 
 add_library(tensorrt_cpp_api)
 add_library(tensorrt_cpp_api::tensorrt_cpp_api ALIAS tensorrt_cpp_api)
-target_sources(tensorrt_cpp_api PRIVATE src/core.cpp)
+target_sources(tensorrt_cpp_api PRIVATE
+    src/core.cpp
+    src/logger.cpp)
 target_include_directories(tensorrt_cpp_api PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
@@ -36,6 +38,14 @@ set_target_properties(tensorrt_cpp_api PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR})
 if(NOT MSVC)
     target_compile_options(tensorrt_cpp_api PRIVATE -Wall -Wextra)
+endif()
+
+# Optional spdlog logger adapter (E2). PUBLIC so makeSpdlogLogger() is declared and
+# spdlog is linked for consumers of a spdlog-enabled install.
+if(TRT_CPP_API_WITH_SPDLOG)
+    find_package(spdlog REQUIRED)
+    target_link_libraries(tensorrt_cpp_api PUBLIC spdlog::spdlog)
+    target_compile_definitions(tensorrt_cpp_api PUBLIC TRT_CPP_API_WITH_SPDLOG)
 endif()
 
 if(TRT_CPP_API_BUILD_TESTS)
