@@ -27,7 +27,7 @@ Python-first API (Python is a thin binding over the C++ core); training; model e
 | TensorRT | **10.6 – 11.0** | build on 10.16.x today; code written to the 11.0 surface; legacy paths gated `#if NV_TENSORRT_MAJOR < 11`. A CMake-time error names the required range (community #41/#54). |
 | CUDA | **12.4 – 13.x** | dev host uses 12.6 (driver 565 caps at 12.7); CI/fresh hosts 13.3. |
 | Compute capability | **>= 7.5** (Turing) | matches TRT 11 / CUDA 13 floor. Build `sm_86` here. |
-| Compiler | GCC >= 11, Clang >= 14 | C++17. |
+| Compiler | GCC >= 11, Clang >= 14 | **C++20** (corrected from C++17 in E1: the public API uses `std::span`, which is C++20; all target compilers support it, it is a superset of C++17 so the "OpenCV 5 needs C++17 min" forward-compat rationale still holds, and nvcc 12.x supports `-std=c++20`). |
 | CMake | **>= 3.22** | `CUDAToolkit`, `FetchContent`, export helpers. |
 | OpenCV | 4.9 – 4.13 (**optional**) | only for interop module; never `OPENCV_DNN_CUDA`. |
 | Python | 3.9 – 3.13 (**optional**) | pybind11 + scikit-build-core. |
@@ -534,7 +534,7 @@ without ever loading an engine the runtime cannot actually deserialize.
 
 Targets: `tensorrt_cpp_api` (core) + `tensorrt_cpp_api_preproc` + optional
 `tensorrt_cpp_api_opencv`, all under the `tensorrt_cpp_api::` namespace.
-`target_compile_features(... PUBLIC cxx_std_17)`, `CXX_EXTENSIONS OFF`. Each shared
+`target_compile_features(... PUBLIC cxx_std_20)`, `CXX_EXTENSIONS OFF`. Each shared
 target sets `VERSION ${PROJECT_VERSION}` / `SOVERSION 7` for a proper distro soname.
 Options (all **default OFF**, consistent `TRT_CPP_API_` prefix): `WITH_OPENCV`,
 `WITH_SPDLOG`, `BUILD_PREPROC`, `BUILD_PYTHON`, `BUILD_TESTS`, `BUILD_EXAMPLES`.
