@@ -39,3 +39,6 @@ cmake-build-*
 
 *.onnx
 
+
+# Keep the tiny committed test fixtures (override the global *.onnx ignore)
+!tests/models/*.onnx

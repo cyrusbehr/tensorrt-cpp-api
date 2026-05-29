@@ -43,6 +43,7 @@ target_sources(tensorrt_cpp_api PRIVATE
     src/cuda.cpp
     src/allocator.cpp
     src/device_tensor.cpp
+    src/engine_builder.cpp
     src/detail/buffers.cpp
     src/detail/trt_common.cpp)
 target_include_directories(tensorrt_cpp_api PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

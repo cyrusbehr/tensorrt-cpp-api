@@ -37,8 +37,10 @@ gtest_discover_tests(trtcpp_cuda_tests PROPERTIES LABELS "gpu")
 if(TARGET TensorRT::TensorRT)
     add_executable(trtcpp_trt_tests
         test_trt_logger.cpp
-        test_trt_plugin.cpp)
+        test_trt_plugin.cpp
+        test_engine_builder.cpp)
     target_include_directories(trtcpp_trt_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_definitions(trtcpp_trt_tests PRIVATE TRTCPP_TEST_MODEL_DIR="${CMAKE_SOURCE_DIR}/tests/models")
     target_link_libraries(trtcpp_trt_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api TensorRT::TensorRT GTest::gtest_main)
     gtest_discover_tests(trtcpp_trt_tests PROPERTIES LABELS "gpu")
 endif()
