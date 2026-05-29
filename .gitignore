@@ -38,6 +38,7 @@ cmake-build-*
 .vscode/
 
 *.onnx
+*.pt
 
 
 # Keep the tiny committed test fixtures (override the global *.onnx ignore)

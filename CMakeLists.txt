@@ -141,6 +141,12 @@ if(TRT_CPP_API_BUILD_PYTHON)
     add_subdirectory(python)
 endif()
 
+# Reference examples (F). Normally built standalone against the installed package; this in-tree
+# path is a convenience that reuses the just-built targets.
+if(TRT_CPP_API_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
 # ---- install / export (find_package(tensorrt_cpp_api) consumable) ----
 # Skipped under scikit-build-core (SKBUILD): a Python wheel must contain only the Python package
 # and the compiled extension, not the C++ dev headers / static libs / CMake package config.
