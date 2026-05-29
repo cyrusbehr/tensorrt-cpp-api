@@ -17,6 +17,9 @@ namespace trtcpp::preproc {
 /// How to turn a decoded HWC uint8 image into a TRT-ready NCHW tensor. The normalization is
 /// out = (pixel - mean[c]) * scale[c] applied per channel (fixes the v6 broken per-channel
 /// path): e.g. [0,1] scaling is mean=0, scale=1/255; ImageNet folds 1/(255*std) into scale.
+/// The output channel count and dtype are taken from `dst` (not duplicated here). Resize,
+/// layout, and channel copy handle any channel count; per-channel mean/scale cover up to 4
+/// channels (channels >= 4 use identity normalization).
 struct PreprocSpec {
     std::array<float, 4> mean{0.0f, 0.0f, 0.0f, 0.0f};
     std::array<float, 4> scale{1.0f, 1.0f, 1.0f, 1.0f};

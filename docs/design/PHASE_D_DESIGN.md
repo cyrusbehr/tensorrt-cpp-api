@@ -539,8 +539,11 @@ Targets: `tensorrt_cpp_api` (core) + `tensorrt_cpp_api_preproc` + optional
 `tensorrt_cpp_api_opencv`, all under the `tensorrt_cpp_api::` namespace.
 `target_compile_features(... PUBLIC cxx_std_20)`, `CXX_EXTENSIONS OFF`. Each shared
 target sets `VERSION ${PROJECT_VERSION}` / `SOVERSION 7` for a proper distro soname.
-Options (all **default OFF**, consistent `TRT_CPP_API_` prefix): `WITH_OPENCV`,
-`WITH_SPDLOG`, `BUILD_PREPROC`, `BUILD_PYTHON`, `BUILD_TESTS`, `BUILD_EXAMPLES`.
+Options (consistent `TRT_CPP_API_` prefix): `WITH_OPENCV`, `WITH_SPDLOG`, `BUILD_PYTHON`,
+`BUILD_TESTS`, `BUILD_EXAMPLES` default **OFF**; `BUILD_PREPROC` defaults **ON** (E11
+decision: the preproc sublib is a first-class deliverable and CUDA/nvcc is already required
+by the engine core). E11 note: `PreprocSpec` drops the sketch's `outChannels`/`outDtype`
+fields -- both are derived from the `dst` tensor instead (cleaner, no consistency hazard).
 
 **The exported package re-resolves its own dependencies** (build reviewer's #1 — without
 this a downstream `find_package(tensorrt_cpp_api)` errors on missing imported targets).
