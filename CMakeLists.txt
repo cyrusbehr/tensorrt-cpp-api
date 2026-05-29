@@ -97,10 +97,13 @@ endif()
 # Optional preprocessing sublibrary (E11): one fused CUDA (.cu) kernel. Separate target --
 # the engine core does NOT depend on it. Enabling it turns on the CUDA language (needs nvcc).
 if(TRT_CPP_API_BUILD_PREPROC)
-    enable_language(CUDA)
+    # Architectures must be set BEFORE enable_language(CUDA): CMake validates the variable
+    # during language init, and an unset value on hosts where nvcc can't self-detect a default
+    # aborts configuration.
     if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES 75-real 80-real 86-real 89-real 90-virtual)
     endif()
+    enable_language(CUDA)
     add_library(tensorrt_cpp_api_preproc src/preproc.cu)
     add_library(tensorrt_cpp_api::preproc ALIAS tensorrt_cpp_api_preproc)
     target_link_libraries(tensorrt_cpp_api_preproc PUBLIC tensorrt_cpp_api::tensorrt_cpp_api CUDA::cudart)
@@ -109,9 +112,44 @@ if(TRT_CPP_API_BUILD_PREPROC)
         CUDA_STANDARD 20
         CUDA_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
+        EXPORT_NAME preproc # consumers link tensorrt_cpp_api::preproc (matches the in-tree alias)
         VERSION ${PROJECT_VERSION}
         SOVERSION ${PROJECT_VERSION_MAJOR})
 endif()
+
+# ---- install / export (find_package(tensorrt_cpp_api) consumable) ----
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+set(TRTCPP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_LIBDIR}/cmake/tensorrt_cpp_api)
+
+set(TRTCPP_INSTALL_TARGETS tensorrt_cpp_api)
+if(TARGET tensorrt_cpp_api_preproc)
+    list(APPEND TRTCPP_INSTALL_TARGETS tensorrt_cpp_api_preproc)
+endif()
+
+install(TARGETS ${TRTCPP_INSTALL_TARGETS}
+    EXPORT tensorrt_cpp_apiTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/tensorrt_cpp_api/build_config.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tensorrt_cpp_api)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindTensorRT.cmake DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
+
+install(EXPORT tensorrt_cpp_apiTargets NAMESPACE tensorrt_cpp_api:: DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
+
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tensorrt_cpp_api-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config.cmake
+    INSTALL_DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config-version.cmake
+    VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config-version.cmake
+    DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
 
 if(TRT_CPP_API_BUILD_TESTS)
     enable_testing()
