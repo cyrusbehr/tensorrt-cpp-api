@@ -1,34 +1,44 @@
-cmake_minimum_required(VERSION 3.18)
-project(tensorrt_cpp_api)
+cmake_minimum_required(VERSION 3.22)
+project(tensorrt_cpp_api VERSION 7.0.0 LANGUAGES CXX)
 
-# Use ccache to speed up rebuilds
-include(cmake/ccache.cmake)
+# v7 rewrite. The build system grows by phase (see docs/design/PHASE_D_DESIGN.md);
+# this is the E1 stage: a dependency-free core-types library + tests. CUDA/TensorRT,
+# the preprocessing sublib, OpenCV interop, install/export, and Python bindings are
+# wired up in later E phases. All optional components default OFF.
 
-# Set C++ version and optimization level
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Ofast -DNDEBUG -Wno-deprecated-declarations")
+option(TRT_CPP_API_BUILD_TESTS    "Build unit/integration tests"                OFF)
+option(TRT_CPP_API_BUILD_EXAMPLES "Build reference examples"                    OFF)
+option(TRT_CPP_API_BUILD_PREPROC  "Build the preprocessing sublibrary (E11)"    OFF)
+option(TRT_CPP_API_BUILD_PYTHON   "Build the pybind11 Python bindings (E15)"    OFF)
+option(TRT_CPP_API_WITH_OPENCV    "Build the optional OpenCV interop (E12/E13)" OFF)
+option(TRT_CPP_API_WITH_SPDLOG    "Build the optional spdlog logger adapter"    OFF)
 
-# For finding FindTensorRT.cmake
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
-
-# TODO: Specify the path to TensorRT root dir
-if (NOT TensorRT_DIR)
-    set(TensorRT_DIR /home/cyrus/work/libs/TensorRT-10.0.0.6/)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
-# Use the correct version of CUDA
-set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
 
-# We require CUDA, OpenCV, and TensorRT
-find_package(TensorRT REQUIRED)
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(fmt REQUIRED)
+# Modern ccache hook (replaces v6's generator-specific RULE_LAUNCH_COMPILE).
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()
 
-add_library(tensorrt_cpp_api SHARED
-        src/engine.cpp)
+add_library(tensorrt_cpp_api)
+add_library(tensorrt_cpp_api::tensorrt_cpp_api ALIAS tensorrt_cpp_api)
+target_sources(tensorrt_cpp_api PRIVATE src/core.cpp)
+target_include_directories(tensorrt_cpp_api PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_compile_features(tensorrt_cpp_api PUBLIC cxx_std_20)
+set_target_properties(tensorrt_cpp_api PROPERTIES
+    CXX_EXTENSIONS OFF
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR})
+if(NOT MSVC)
+    target_compile_options(tensorrt_cpp_api PRIVATE -Wall -Wextra)
+endif()
 
-target_include_directories(tensorrt_cpp_api PUBLIC ${OpenCV_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS} ${TensorRT_INCLUDE_DIRS} include include/interfaces)
-target_link_libraries(tensorrt_cpp_api PUBLIC ${OpenCV_LIBS} ${CUDA_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${TensorRT_LIBRARIES} fmt::fmt)
-
-add_executable(run_inference_benchmark src/main.cpp)
-target_link_libraries(run_inference_benchmark tensorrt_cpp_api fmt::fmt)
+if(TRT_CPP_API_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
