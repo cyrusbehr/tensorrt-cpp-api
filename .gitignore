@@ -51,3 +51,6 @@ __pycache__/
 .pytest_cache/
 dist/
 wheelhouse/
+
+# Generated API docs (doxygen Doxyfile)
+docs/api/
