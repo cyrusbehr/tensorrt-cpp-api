@@ -90,6 +90,27 @@ std::tuple<int, int, int> parseVersion(const std::string &version) {
 
 } // namespace
 
+Result<std::vector<std::byte>> readFile(const std::string &path) {
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(path, ec)) {
+        return Status{StatusCode::kNotFound, "not a readable regular file: " + path};
+    }
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) {
+        return Status{StatusCode::kNotFound, "cannot open file: " + path};
+    }
+    const std::streamsize size = file.tellg();
+    if (size < 0) {
+        return Status{StatusCode::kIoError, "cannot size file: " + path};
+    }
+    file.seekg(0, std::ios::beg);
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+    if (size > 0 && !file.read(reinterpret_cast<char *>(bytes.data()), size)) {
+        return Status{StatusCode::kIoError, "cannot read file: " + path};
+    }
+    return bytes;
+}
+
 std::string cacheFileName(const std::string &onnxStem, const std::string &onnxSha256, const std::string &trtVersion,
                           const std::string &gpuUuid, const std::string &precision) {
     const std::string sha8 = onnxSha256.substr(0, std::min<std::size_t>(8, onnxSha256.size()));

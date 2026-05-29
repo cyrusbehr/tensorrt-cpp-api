@@ -1,136 +1,266 @@
-#include "engine.h"
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <iterator>
-#include <random>
+#include "tensorrt_cpp_api/engine.h"
 
-using namespace nvinfer1;
-using namespace Util;
+#include "detail/engine_cache.h"
+#include "detail/trt_common.h"
 
-void Logger::log(Severity severity, const char *msg) noexcept {
-    switch (severity) {
-        case Severity::kVERBOSE:
-            spdlog::debug(msg);
-            break;
-        case Severity::kINFO:
-            spdlog::info(msg);
-            break;
-        case Severity::kWARNING:
-            spdlog::warn(msg);
-            break;
-        case Severity::kERROR:
-            spdlog::error(msg);
-            break;
-        case Severity::kINTERNAL_ERROR:
-            spdlog::critical(msg);
-            break;
-        default:
-            spdlog::info("Unexpected severity level");
+#include <cuda_runtime.h>
+
+#include <NvInfer.h>
+
+#include <utility>
+
+namespace trtcpp {
+namespace {
+
+DType fromTrtDataType(nvinfer1::DataType type) {
+    switch (type) {
+    case nvinfer1::DataType::kFLOAT:
+        return DType::kFloat32;
+    case nvinfer1::DataType::kHALF:
+        return DType::kFloat16;
+    case nvinfer1::DataType::kINT8:
+        return DType::kInt8;
+    case nvinfer1::DataType::kINT32:
+        return DType::kInt32;
+    case nvinfer1::DataType::kBOOL:
+        return DType::kBool;
+    case nvinfer1::DataType::kUINT8:
+        return DType::kUInt8;
+    case nvinfer1::DataType::kFP8:
+        return DType::kFp8;
+    case nvinfer1::DataType::kBF16:
+        return DType::kBFloat16;
+    case nvinfer1::DataType::kINT64:
+        return DType::kInt64;
+    case nvinfer1::DataType::kINT4:
+        return DType::kInt4;
     }
+    return DType::kFloat32;
 }
 
-Int8EntropyCalibrator2::Int8EntropyCalibrator2(int32_t batchSize, int32_t inputW, int32_t inputH, const std::string &calibDataDirPath,
-                                               const std::string &calibTableName, const std::string &inputBlobName,
-                                               const std::array<float, 3> &subVals, const std::array<float, 3> &divVals, bool normalize,
-                                               bool readCache)
-    : m_batchSize(batchSize), m_inputW(inputW), m_inputH(inputH), m_imgIdx(0), m_calibTableName(calibTableName),
-      m_inputBlobName(inputBlobName), m_subVals(subVals), m_divVals(divVals), m_normalize(normalize), m_readCache(readCache) {
-
-    // Allocate GPU memory to hold the entire batch
-    m_inputCount = 3 * inputW * inputH * batchSize;
-    checkCudaErrorCode(cudaMalloc(&m_deviceInput, m_inputCount * sizeof(float)));
-
-    // Read the name of all the files in the specified directory.
-    if (!doesFileExist(calibDataDirPath)) {
-        auto msg = "Error, directory at provided path does not exist: " + calibDataDirPath;
-        spdlog::error(msg);
-        throw std::runtime_error(msg);
+nvinfer1::Dims toDims(const Shape &shape) {
+    nvinfer1::Dims dims;
+    dims.nbDims = shape.rank();
+    for (int i = 0; i < shape.rank(); ++i) {
+        dims.d[i] = shape[i];
     }
-
-    m_imgPaths = getFilesInDirectory(calibDataDirPath);
-    if (m_imgPaths.size() < static_cast<size_t>(batchSize)) {
-        auto msg = "Error, there are fewer calibration images than the specified batch size!";
-        spdlog::error(msg);
-        throw std::runtime_error(msg);
-    }
-
-    // Randomize the calibration data
-    auto rd = std::random_device{};
-    auto rng = std::default_random_engine{rd()};
-    std::shuffle(std::begin(m_imgPaths), std::end(m_imgPaths), rng);
+    return dims;
 }
 
-int32_t Int8EntropyCalibrator2::getBatchSize() const noexcept {
-    // Return the batch size
-    return m_batchSize;
+static_assert(Shape::kMaxRank == nvinfer1::Dims::MAX_DIMS, "Shape::kMaxRank must match nvinfer1::Dims::MAX_DIMS");
+
+Shape fromDims(const nvinfer1::Dims &dims) {
+    if (dims.nbDims < 0) {
+        return Shape{}; // TensorRT signals invalid dims with nbDims == -1
+    }
+    std::array<std::int64_t, Shape::kMaxRank> values{};
+    for (int i = 0; i < dims.nbDims; ++i) {
+        values[static_cast<std::size_t>(i)] = dims.d[i];
+    }
+    return Shape{std::span<const std::int64_t>(values.data(), static_cast<std::size_t>(dims.nbDims))};
 }
 
-bool Int8EntropyCalibrator2::getBatch(void **bindings, const char **names, int32_t nbBindings) noexcept {
-    // This method will read a batch of images into GPU memory, and place the
-    // pointer to the GPU memory in the bindings variable.
+} // namespace
 
-    if (m_imgIdx + m_batchSize > static_cast<int>(m_imgPaths.size())) {
-        // There are not enough images left to satisfy an entire batch
-        return false;
-    }
+struct Engine::Impl {
+    EngineOptions options;
+    detail::TrtLoggerBridge bridge;
+    detail::TrtUniquePtr<nvinfer1::IRuntime> runtime;
+    detail::TrtUniquePtr<nvinfer1::ICudaEngine> engine;
+    detail::TrtUniquePtr<nvinfer1::IExecutionContext> context;
+    std::vector<TensorInfo> tensors;
+    std::vector<std::string> inputNames;
+    std::vector<std::string> outputNames;
 
-    // Read the calibration images into memory for the current batch
-    std::vector<cv::cuda::GpuMat> inputImgs;
-    for (int i = m_imgIdx; i < m_imgIdx + m_batchSize; i++) {
-        spdlog::info("Reading image {}: {}", i, m_imgPaths[i]);
-        auto cpuImg = cv::imread(m_imgPaths[i]);
-        if (cpuImg.empty()) {
-            spdlog::error("Fatal error: Unable to read image at path: " + m_imgPaths[i]);
-            return false;
+    explicit Impl(EngineOptions opts) : options(std::move(opts)), bridge(options.logger) {}
+
+    // Select the profile and set every input's shape (and optionally its device address) on
+    // the shared context. The ordering -- profile then input shapes -- is the TRT requirement.
+    Status bindInputs(const std::unordered_map<std::string, TensorView> &inputs, int profileIndex, cudaStream_t stream, bool setAddresses) {
+        const int nbProfiles = engine->getNbOptimizationProfiles();
+        const int profileCeiling = nbProfiles > 0 ? nbProfiles : 1;
+        if (profileIndex < 0 || profileIndex >= profileCeiling) {
+            return Status{StatusCode::kInvalidArgument, "profileIndex out of range"};
         }
-
-        cv::cuda::GpuMat gpuImg;
-        gpuImg.upload(cpuImg);
-        //cv::cuda::cvtColor(gpuImg, gpuImg, cv::COLOR_BGR2RGB);
-
-        // TODO: Define any preprocessing code here, such as resizing
-        auto resized = Engine<float>::resizeKeepAspectRatioPadRightBottom(gpuImg, m_inputH, m_inputW);
-
-        inputImgs.emplace_back(std::move(resized));
+        if (nbProfiles > 0) {
+            if (!context->setOptimizationProfileAsync(profileIndex, stream)) {
+                return Status{StatusCode::kInvalidArgument,
+                              "setOptimizationProfileAsync failed for profile " + std::to_string(profileIndex)};
+            }
+        }
+        for (const std::string &name : inputNames) {
+            auto it = inputs.find(name);
+            if (it == inputs.end()) {
+                return Status{StatusCode::kInvalidArgument, "missing input tensor: " + name};
+            }
+            if (!context->setInputShape(name.c_str(), toDims(it->second.shape()))) {
+                return Status{StatusCode::kShapeMismatch, "setInputShape rejected the shape for input: " + name};
+            }
+            if (setAddresses && !context->setTensorAddress(name.c_str(), it->second.data())) {
+                return Status{StatusCode::kTensorRtError, "setTensorAddress failed for input: " + name};
+            }
+        }
+        if (!context->allInputDimensionsSpecified()) {
+            return Status{StatusCode::kInvalidArgument, "not all input dimensions were specified"};
+        }
+        return Status{};
     }
+};
 
-    // Convert the batch from NHWC to NCHW
-    // ALso apply normalization, scaling, and mean subtraction
-    auto mfloat = Engine<float>::blobFromGpuMats(inputImgs, m_subVals, m_divVals, m_normalize, true);
-    auto *dataPointer = mfloat.ptr<void>();
+Engine::Engine() = default;
+Engine::Engine(Engine &&) noexcept = default;
+Engine &Engine::operator=(Engine &&) noexcept = default;
+Engine::~Engine() = default;
 
-    // Copy the GPU buffer to member variable so that it persists
-    checkCudaErrorCode(cudaMemcpyAsync(m_deviceInput, dataPointer, m_inputCount * sizeof(float), cudaMemcpyDeviceToDevice));
-
-    m_imgIdx += m_batchSize;
-    if (std::string(names[0]) != m_inputBlobName) {
-        spdlog::error("Error: Incorrect input name provided!");
-        return false;
+Result<Engine> Engine::loadFromFile(const std::string &enginePath, const EngineOptions &options) {
+    auto data = detail::readFile(enginePath); // hardened: rejects directories/missing without throwing
+    if (!data) {
+        return data.status();
     }
-    bindings[0] = m_deviceInput;
-    return true;
+    return loadFromMemory(data.value(), options);
 }
 
-void const *Int8EntropyCalibrator2::readCalibrationCache(size_t &length) noexcept {
-    spdlog::info("Searching for calibration cache: {}", m_calibTableName);
-    m_calibCache.clear();
-    std::ifstream input(m_calibTableName, std::ios::binary);
-    input >> std::noskipws;
-    if (m_readCache && input.good()) {
-        spdlog::info("Reading calibration cache: {}", m_calibTableName);
-        std::copy(std::istream_iterator<char>(input), std::istream_iterator<char>(), std::back_inserter(m_calibCache));
+Result<Engine> Engine::loadFromMemory(std::span<const std::byte> engineData, const EngineOptions &options) {
+    if (cudaError_t code = cudaSetDevice(options.deviceIndex); code != cudaSuccess) {
+        return cudaToStatus(code, "cudaSetDevice");
     }
-    length = m_calibCache.size();
-    return length ? m_calibCache.data() : nullptr;
+    if (Status status = detail::loadPluginLibraries(options.pluginLibraries); !status) {
+        return status;
+    }
+
+    Engine result;
+    result.impl_ = std::make_unique<Impl>(options);
+    Impl &impl = *result.impl_;
+
+    impl.runtime.reset(nvinfer1::createInferRuntime(impl.bridge.nv()));
+    if (!impl.runtime) {
+        return Status{StatusCode::kTensorRtError, "createInferRuntime failed"};
+    }
+    impl.engine.reset(impl.runtime->deserializeCudaEngine(engineData.data(), engineData.size()));
+    if (!impl.engine) {
+        return Status{StatusCode::kTensorRtError, "deserializeCudaEngine failed (corrupt or incompatible engine)"};
+    }
+    impl.context.reset(impl.engine->createExecutionContext());
+    if (!impl.context) {
+        return Status{StatusCode::kTensorRtError, "createExecutionContext failed"};
+    }
+
+    const int nbTensors = impl.engine->getNbIOTensors();
+    for (int i = 0; i < nbTensors; ++i) {
+        const char *name = impl.engine->getIOTensorName(i);
+        TensorInfo info;
+        info.name = name;
+        info.isInput = impl.engine->getTensorIOMode(name) == nvinfer1::TensorIOMode::kINPUT;
+        info.dtype = fromTrtDataType(impl.engine->getTensorDataType(name));
+        info.shape = fromDims(impl.engine->getTensorShape(name));
+        if (info.isInput) {
+            impl.inputNames.push_back(info.name);
+        } else {
+            impl.outputNames.push_back(info.name);
+        }
+        impl.tensors.push_back(std::move(info));
+    }
+    return result;
 }
 
-void Int8EntropyCalibrator2::writeCalibrationCache(const void *ptr, std::size_t length) noexcept {
-    spdlog::info("Writing calibration cache: {}", m_calibTableName);
-    spdlog::info("Calibration cache size: {} bytes", length);
-    std::ofstream output(m_calibTableName, std::ios::binary);
-    output.write(reinterpret_cast<const char *>(ptr), length);
+std::vector<TensorInfo> Engine::tensors() const { return impl_->tensors; }
+std::vector<std::string> Engine::inputNames() const { return impl_->inputNames; }
+std::vector<std::string> Engine::outputNames() const { return impl_->outputNames; }
+int Engine::nbOptimizationProfiles() const { return impl_->engine->getNbOptimizationProfiles(); }
+
+Result<Shape> Engine::tensorShape(const std::string &name) const {
+    for (const TensorInfo &info : impl_->tensors) {
+        if (info.name == name) {
+            return info.shape;
+        }
+    }
+    return Status{StatusCode::kNotFound, "no such tensor: " + name};
 }
 
-Int8EntropyCalibrator2::~Int8EntropyCalibrator2() { checkCudaErrorCode(cudaFree(m_deviceInput)); };
+Result<DType> Engine::tensorDType(const std::string &name) const {
+    for (const TensorInfo &info : impl_->tensors) {
+        if (info.name == name) {
+            return info.dtype;
+        }
+    }
+    return Status{StatusCode::kNotFound, "no such tensor: " + name};
+}
+
+Status Engine::enqueue(const std::unordered_map<std::string, TensorView> &inputs,
+                       const std::unordered_map<std::string, TensorView> &outputs, const Stream &stream, int profileIndex) {
+    if (Status status = impl_->bindInputs(inputs, profileIndex, stream.handle(), /*setAddresses=*/true); !status) {
+        return status;
+    }
+    for (const std::string &name : impl_->outputNames) {
+        auto it = outputs.find(name);
+        if (it == outputs.end()) {
+            return Status{StatusCode::kInvalidArgument, "missing output tensor: " + name};
+        }
+        if (!impl_->context->setTensorAddress(name.c_str(), it->second.data())) {
+            return Status{StatusCode::kTensorRtError, "setTensorAddress failed for output: " + name};
+        }
+    }
+    if (!impl_->context->enqueueV3(stream.handle())) {
+        return Status{StatusCode::kTensorRtError, "enqueueV3 failed"};
+    }
+    return Status{};
+}
+
+Result<std::unordered_map<std::string, Shape>> Engine::outputShapes(const std::unordered_map<std::string, TensorView> &inputs,
+                                                                    int profileIndex) {
+    Stream stream;
+    if (Status status = impl_->bindInputs(inputs, profileIndex, stream.handle(), /*setAddresses=*/false); !status) {
+        return status;
+    }
+    if (Status status = stream.synchronize(); !status) {
+        return status;
+    }
+    std::unordered_map<std::string, Shape> result;
+    for (const std::string &name : impl_->outputNames) {
+        result.emplace(name, fromDims(impl_->context->getTensorShape(name.c_str())));
+    }
+    return result;
+}
+
+Result<std::unordered_map<std::string, Tensor>> Engine::infer(const std::unordered_map<std::string, TensorView> &inputs,
+                                                              const Stream &stream, int profileIndex) {
+    if (Status status = impl_->bindInputs(inputs, profileIndex, stream.handle(), /*setAddresses=*/true); !status) {
+        return status;
+    }
+    std::unordered_map<std::string, Tensor> outputs;
+    for (const TensorInfo &info : impl_->tensors) {
+        if (info.isInput) {
+            continue;
+        }
+        const Shape shape = fromDims(impl_->context->getTensorShape(info.name.c_str()));
+        if (shape.isDynamic()) {
+            return Status{StatusCode::kInternal, "output shape unresolved after setInputShape: " + info.name};
+        }
+        auto tensor = Tensor::allocate(info.dtype, shape, Device::kCuda, impl_->options.deviceIndex);
+        if (!tensor) {
+            return tensor.status();
+        }
+        if (!impl_->context->setTensorAddress(info.name.c_str(), tensor.value().data())) {
+            return Status{StatusCode::kTensorRtError, "setTensorAddress failed for output: " + info.name};
+        }
+        outputs.emplace(info.name, std::move(tensor).value());
+    }
+    if (!impl_->context->enqueueV3(stream.handle())) {
+        return Status{StatusCode::kTensorRtError, "enqueueV3 failed"};
+    }
+    return outputs;
+}
+
+Result<Tensor> Engine::inferSingle(const std::unordered_map<std::string, TensorView> &inputs, const Stream &stream, int profileIndex) {
+    if (impl_->outputNames.size() != 1) {
+        return Status{StatusCode::kInvalidArgument,
+                      "inferSingle requires exactly one output; this engine has " + std::to_string(impl_->outputNames.size())};
+    }
+    auto outputs = infer(inputs, stream, profileIndex);
+    if (!outputs) {
+        return outputs.status();
+    }
+    return std::move(outputs.value().begin()->second);
+}
+
+} // namespace trtcpp

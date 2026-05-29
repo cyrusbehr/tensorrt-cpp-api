@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "tensorrt_cpp_api/build_options.h"
+#include "tensorrt_cpp_api/engine.h"
 #include "tensorrt_cpp_api/logger.h"
 #include "tensorrt_cpp_api/status.h"
 
@@ -30,6 +31,9 @@ public:
     /// hash + TRT version + GPU UUID + build options, with a JSON sidecar and atomic write;
     /// a stale cache (changed ONNX/options/version/GPU) is detected and rebuilt.
     Result<std::string> buildOrLoad(const std::string &onnxPath, const BuildOptions &options);
+
+    /// One-shot: buildOrLoad + deserialize into a ready-to-run Engine. The common entry point.
+    Result<Engine> buildAndLoad(const std::string &onnxPath, const BuildOptions &options, const EngineOptions &engineOptions = {});
 
 private:
     std::shared_ptr<ILogger> logger_;

@@ -161,20 +161,27 @@ EngineBuilder::EngineBuilder(std::shared_ptr<ILogger> logger) : logger_(std::mov
 }
 
 Result<std::vector<std::byte>> EngineBuilder::buildFromOnnxFile(const std::string &onnxPath, const BuildOptions &options) {
-    Status status;
-    std::vector<std::byte> bytes = readFileBytes(onnxPath, status);
-    if (!status) {
-        return status;
+    auto bytes = detail::readFile(onnxPath);
+    if (!bytes) {
+        return bytes.status();
     }
-    return buildFromOnnxBytes(bytes, options);
+    return buildFromOnnxBytes(bytes.value(), options);
+}
+
+Result<Engine> EngineBuilder::buildAndLoad(const std::string &onnxPath, const BuildOptions &options, const EngineOptions &engineOptions) {
+    auto path = buildOrLoad(onnxPath, options);
+    if (!path) {
+        return path.status();
+    }
+    return Engine::loadFromFile(path.value(), engineOptions);
 }
 
 Result<std::string> EngineBuilder::buildOrLoad(const std::string &onnxPath, const BuildOptions &options) {
-    Status status;
-    std::vector<std::byte> onnx = readFileBytes(onnxPath, status);
-    if (!status) {
-        return status;
+    auto onnxResult = detail::readFile(onnxPath);
+    if (!onnxResult) {
+        return onnxResult.status();
     }
+    std::vector<std::byte> &onnx = onnxResult.value();
 
     detail::CacheMeta expected;
     expected.onnxSha256 = detail::sha256Hex(onnx.data(), onnx.size());

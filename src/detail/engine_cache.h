@@ -3,10 +3,16 @@
 #include <cstddef>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "tensorrt_cpp_api/status.h"
 
 namespace trtcpp::detail {
+
+// Read a regular file fully into memory. Rejects missing paths and directories (whose
+// tellg() returns a huge sentinel that would otherwise trigger a giant allocation), so it
+// never throws out of the no-throw API. Shared by the builder and the engine loader.
+Result<std::vector<std::byte>> readFile(const std::string &path);
 
 // Metadata recorded in the JSON sidecar next to a cached engine, used to detect stale
 // caches across ONNX changes, TensorRT versions, GPUs, and build options.

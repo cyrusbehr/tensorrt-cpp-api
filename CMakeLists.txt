@@ -44,6 +44,7 @@ target_sources(tensorrt_cpp_api PRIVATE
     src/allocator.cpp
     src/device_tensor.cpp
     src/engine_builder.cpp
+    src/engine.cpp
     src/detail/buffers.cpp
     src/detail/engine_cache.cpp
     src/detail/sha256.cpp

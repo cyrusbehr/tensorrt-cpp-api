@@ -352,10 +352,11 @@ public:
                    const Stream& stream, int profileIndex = 0);
 
     /// Library-allocated convenience: caller supplies inputs + stream; the library
-    /// resolves output shapes on its OWN execution context (so concurrent infer() calls
-    /// do not stomp shared state) and returns owned device Tensors sized from
-    /// getTensorShape AFTER setInputShape (never build-time -1 dims). For high
-    /// concurrency use EnginePool. Engine itself is thread-COMPATIBLE, not thread-safe.
+    /// resolves output shapes on Engine's single execution context (Engine is
+    /// thread-COMPATIBLE, not thread-safe -- one inference at a time) and returns owned
+    /// device Tensors sized from getTensorShape AFTER setInputShape (never build-time -1
+    /// dims). For CONCURRENT inference use EnginePool, which gives each lease its own
+    /// context + profile (E8 implemented Engine on a single shared context per this note).
     Result<std::unordered_map<std::string, Tensor>>
     infer(const std::unordered_map<std::string, TensorView>& inputs,
           const Stream& stream, int profileIndex = 0);
