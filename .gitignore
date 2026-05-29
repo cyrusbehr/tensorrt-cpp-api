@@ -54,3 +54,6 @@ wheelhouse/
 
 # Generated API docs (doxygen Doxyfile)
 docs/api/
+
+# CTest working dir (created when running ctest from the repo root)
+Testing/
