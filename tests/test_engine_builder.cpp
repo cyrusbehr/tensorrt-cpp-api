@@ -80,15 +80,6 @@ TEST(EngineBuilder, Fp8RejectedOnAmpere) {
     EXPECT_EQ(engine.status().code(), StatusCode::kUnsupported);
 }
 
-TEST(EngineBuilder, CalibLegacyRejectedForNow) {
-    EngineBuilder builder;
-    BuildOptions options;
-    options.precision = Precision::kInt8CalibLegacy;
-    auto engine = builder.buildFromOnnxFile(modelPath("relu_1x3x8x8.onnx"), options);
-    EXPECT_FALSE(engine.ok());
-    EXPECT_EQ(engine.status().code(), StatusCode::kUnsupported);
-}
-
 TEST(EngineBuilder, BuildOrLoadCacheHitMissStale) {
     const auto dir = std::filesystem::temp_directory_path() / "trtcpp_engine_cache";
     std::filesystem::remove_all(dir);

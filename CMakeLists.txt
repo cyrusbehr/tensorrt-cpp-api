@@ -35,6 +35,11 @@ find_package(CUDAToolkit REQUIRED)
 # -DTensorRT_DIR=<root> for a tarball install.
 find_package(TensorRT REQUIRED)
 
+# Generate build_config.h recording the library + TensorRT versions, so public headers can
+# version-gate (e.g. the legacy calibrator) without including a TensorRT header.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_config.h.in
+               ${CMAKE_CURRENT_BINARY_DIR}/generated/tensorrt_cpp_api/build_config.h @ONLY)
+
 add_library(tensorrt_cpp_api)
 add_library(tensorrt_cpp_api::tensorrt_cpp_api ALIAS tensorrt_cpp_api)
 target_sources(tensorrt_cpp_api PRIVATE
@@ -46,7 +51,9 @@ target_sources(tensorrt_cpp_api PRIVATE
     src/engine_builder.cpp
     src/engine.cpp
     src/engine_pool.cpp
+    src/calibrator.cpp
     src/detail/buffers.cpp
+    src/detail/calibrator_bridge.cpp
     src/detail/engine_cache.cpp
     src/detail/execution.cpp
     src/detail/sha256.cpp
@@ -57,6 +64,7 @@ target_link_libraries(tensorrt_cpp_api
     PRIVATE TensorRT::TensorRT)
 target_include_directories(tensorrt_cpp_api PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include>)
 target_compile_features(tensorrt_cpp_api PUBLIC cxx_std_20)
 set_target_properties(tensorrt_cpp_api PROPERTIES

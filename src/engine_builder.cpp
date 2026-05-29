@@ -1,8 +1,13 @@
 #include "tensorrt_cpp_api/engine_builder.h"
 
+#include "detail/calibrator_bridge.h"
 #include "detail/engine_cache.h"
 #include "detail/sha256.h"
 #include "detail/trt_common.h"
+
+#include "tensorrt_cpp_api/calibrator.h"
+
+#include <memory>
 
 #include <cuda_runtime.h>
 
@@ -61,8 +66,9 @@ Status validatePrecision(const BuildOptions &options) {
 #if NV_TENSORRT_MAJOR >= 11
         return Status{StatusCode::kUnsupported, "kInt8CalibLegacy is removed in TensorRT 11; use kInt8Qdq with a modelopt-quantized ONNX"};
 #else
-        return Status{StatusCode::kUnsupported,
-                      "kInt8CalibLegacy (calibrator PTQ) is provided by the calibration module; use kInt8Qdq for now"};
+        if (!options.calibrator) {
+            return Status{StatusCode::kInvalidArgument, "kInt8CalibLegacy requires options.calibrator (see makeRawBatchCalibrator)"};
+        }
 #endif
     }
     if (options.precision == Precision::kFp8 || options.precision == Precision::kNvfp4) {
@@ -316,10 +322,34 @@ Result<std::vector<std::byte>> EngineBuilder::buildFromOnnxBytes(std::span<const
 
 #if NV_TENSORRT_MAJOR < 11
     // Weak-typing path (precision flags). On TRT 11 these flags are removed; strong typing
-    // carries precision instead.
+    // carries precision instead. The calibrator bridge must outlive buildSerializedNetwork.
+    std::unique_ptr<detail::Int8CalibratorBridge> calibratorBridge;
     if (!stronglyTyped) {
         if (options.precision == Precision::kFp16) {
             config->setFlag(nvinfer1::BuilderFlag::kFP16);
+        } else if (options.precision == Precision::kInt8CalibLegacy) {
+            if (!builder->platformHasFastInt8()) {
+                return Status{StatusCode::kUnsupported, "GPU does not support fast INT8"};
+            }
+            if (network->getNbInputs() != 1) {
+                return Status{StatusCode::kUnsupported, "legacy INT8 calibration supports single-input models only"};
+            }
+            config->setFlag(nvinfer1::BuilderFlag::kINT8);
+            const nvinfer1::ITensor *input = network->getInput(0);
+            const nvinfer1::Dims inputDims = input->getDimensions();
+            for (int i = 0; i < inputDims.nbDims; ++i) {
+                if (inputDims.d[i] < 0) {
+                    return Status{StatusCode::kUnsupported, "legacy INT8 calibration requires a static input shape"};
+                }
+            }
+            std::vector<std::int64_t> batchDims;
+            batchDims.push_back(options.calibrator->batchSize());
+            for (int i = 1; i < inputDims.nbDims; ++i) {
+                batchDims.push_back(inputDims.d[i]);
+            }
+            Shape batchShape{std::span<const std::int64_t>(batchDims.data(), batchDims.size())};
+            calibratorBridge = std::make_unique<detail::Int8CalibratorBridge>(options.calibrator, input->getName(), batchShape);
+            config->setInt8Calibrator(calibratorBridge.get());
         }
     }
 #endif
