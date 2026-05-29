@@ -45,8 +45,10 @@ target_sources(tensorrt_cpp_api PRIVATE
     src/device_tensor.cpp
     src/engine_builder.cpp
     src/engine.cpp
+    src/engine_pool.cpp
     src/detail/buffers.cpp
     src/detail/engine_cache.cpp
+    src/detail/execution.cpp
     src/detail/sha256.cpp
     src/detail/trt_common.cpp)
 target_include_directories(tensorrt_cpp_api PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

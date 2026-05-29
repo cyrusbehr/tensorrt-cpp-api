@@ -42,7 +42,8 @@ if(TARGET TensorRT::TensorRT)
         test_trt_logger.cpp
         test_trt_plugin.cpp
         test_engine_builder.cpp
-        test_engine.cpp)
+        test_engine.cpp
+        test_engine_pool.cpp)
     target_include_directories(trtcpp_trt_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_compile_definitions(trtcpp_trt_tests PRIVATE TRTCPP_TEST_MODEL_DIR="${CMAKE_SOURCE_DIR}/tests/models")
     target_link_libraries(trtcpp_trt_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api TensorRT::TensorRT GTest::gtest_main)
