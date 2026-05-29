@@ -1,81 +1,72 @@
-# source:
-# https://github.com/NVIDIA/tensorrt-laboratory/blob/master/cmake/FindTensorRT.cmake
+# FindTensorRT.cmake -- locate a TensorRT install (NVIDIA apt repo OR tarball) and expose
+# the imported target TensorRT::TensorRT (nvinfer + nvonnxparser + headers). Supports
+# TensorRT 10.0 through 11.x and errors clearly otherwise. Relocatable: it bakes no
+# build-tree paths, so it can be installed alongside the package config (Phase E14/H).
+#
+# Hints: set -DTensorRT_DIR=<tarball root> (or the env var) to point at a tarball; on a
+# host with libnvinfer-dev from the NVIDIA apt repo no hint is needed.
 
-# This module defines the following variables:
-#
-# ::
-#
-#   TensorRT_INCLUDE_DIRS
-#   TensorRT_LIBRARIES
-#   TensorRT_FOUND
-#
-# ::
-#
-#   TensorRT_VERSION_STRING - version (x.y.z)
-#   TensorRT_VERSION_MAJOR  - major version (x)
-#   TensorRT_VERSION_MINOR  - minor version (y)
-#   TensorRT_VERSION_PATCH  - patch version (z)
-#
-# Hints
-# ^^^^^
-# A user may set ``TensorRT_DIR`` to an installation root to tell this module where to look.
-#
-set(_TensorRT_SEARCHES)
-
+set(_trt_hints)
 if(TensorRT_DIR)
-    set(_TensorRT_SEARCH_ROOT PATHS ${TensorRT_DIR} NO_DEFAULT_PATH)
-    list(APPEND _TensorRT_SEARCHES _TensorRT_SEARCH_ROOT)
+    list(APPEND _trt_hints "${TensorRT_DIR}")
+endif()
+if(DEFINED ENV{TensorRT_DIR})
+    list(APPEND _trt_hints "$ENV{TensorRT_DIR}")
 endif()
 
-# appends some common paths
-set(_TensorRT_SEARCH_NORMAL
-        PATHS "/usr"
-        )
-list(APPEND _TensorRT_SEARCHES _TensorRT_SEARCH_NORMAL)
+find_path(TensorRT_INCLUDE_DIR
+    NAMES NvInfer.h
+    HINTS ${_trt_hints}
+    PATH_SUFFIXES include
+    PATHS /usr/include/x86_64-linux-gnu /usr/include /usr/local/include /usr/local/tensorrt/include)
 
-# Include dir
-foreach(search ${_TensorRT_SEARCHES})
-    find_path(TensorRT_INCLUDE_DIR NAMES NvInfer.h ${${search}} PATH_SUFFIXES include)
-endforeach()
+find_library(TensorRT_nvinfer_LIBRARY
+    NAMES nvinfer
+    HINTS ${_trt_hints}
+    PATH_SUFFIXES lib lib64 targets/x86_64-linux/lib
+    PATHS /usr/lib/x86_64-linux-gnu /usr/lib /usr/local/lib)
 
-if(NOT TensorRT_LIBRARY)
-    foreach(search ${_TensorRT_SEARCHES})
-        find_library(TensorRT_LIBRARY NAMES nvinfer ${${search}} PATH_SUFFIXES lib)
-    endforeach()
-endif()
+find_library(TensorRT_nvonnxparser_LIBRARY
+    NAMES nvonnxparser
+    HINTS ${_trt_hints}
+    PATH_SUFFIXES lib lib64 targets/x86_64-linux/lib
+    PATHS /usr/lib/x86_64-linux-gnu /usr/lib /usr/local/lib)
 
-if(NOT TensorRT_NVONNXPARSER_LIBRARY)
-    foreach(search ${_TensorRT_SEARCHES})
-        find_library(TensorRT_NVONNXPARSER_LIBRARY NAMES nvonnxparser ${${search}} PATH_SUFFIXES lib)
-    endforeach()
-endif()
-
-mark_as_advanced(TensorRT_INCLUDE_DIR)
-
-if(TensorRT_INCLUDE_DIR AND EXISTS "${TensorRT_INCLUDE_DIR}/NvInfer.h")
-    file(STRINGS "${TensorRT_INCLUDE_DIR}/NvInfer.h" TensorRT_MAJOR REGEX "^#define NV_TENSORRT_MAJOR [0-9]+.*$")
-    file(STRINGS "${TensorRT_INCLUDE_DIR}/NvInfer.h" TensorRT_MINOR REGEX "^#define NV_TENSORRT_MINOR [0-9]+.*$")
-    file(STRINGS "${TensorRT_INCLUDE_DIR}/NvInfer.h" TensorRT_PATCH REGEX "^#define NV_TENSORRT_PATCH [0-9]+.*$")
-
-    string(REGEX REPLACE "^#define NV_TENSORRT_MAJOR ([0-9]+).*$" "\\1" TensorRT_VERSION_MAJOR "${TensorRT_MAJOR}")
-    string(REGEX REPLACE "^#define NV_TENSORRT_MINOR ([0-9]+).*$" "\\1" TensorRT_VERSION_MINOR "${TensorRT_MINOR}")
-    string(REGEX REPLACE "^#define NV_TENSORRT_PATCH ([0-9]+).*$" "\\1" TensorRT_VERSION_PATCH "${TensorRT_PATCH}")
-    set(TensorRT_VERSION_STRING "${TensorRT_VERSION_MAJOR}.${TensorRT_VERSION_MINOR}.${TensorRT_VERSION_PATCH}")
+if(TensorRT_INCLUDE_DIR AND EXISTS "${TensorRT_INCLUDE_DIR}/NvInferVersion.h")
+    file(STRINGS "${TensorRT_INCLUDE_DIR}/NvInferVersion.h" _trt_ver_lines REGEX "#define NV_TENSORRT_(MAJOR|MINOR|PATCH) ")
+    string(REGEX REPLACE ".*NV_TENSORRT_MAJOR ([0-9]+).*" "\\1" TensorRT_VERSION_MAJOR "${_trt_ver_lines}")
+    string(REGEX REPLACE ".*NV_TENSORRT_MINOR ([0-9]+).*" "\\1" TensorRT_VERSION_MINOR "${_trt_ver_lines}")
+    string(REGEX REPLACE ".*NV_TENSORRT_PATCH ([0-9]+).*" "\\1" TensorRT_VERSION_PATCH "${_trt_ver_lines}")
+    set(TensorRT_VERSION "${TensorRT_VERSION_MAJOR}.${TensorRT_VERSION_MINOR}.${TensorRT_VERSION_PATCH}")
 endif()
 
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(TensorRT REQUIRED_VARS TensorRT_LIBRARY TensorRT_INCLUDE_DIR VERSION_VAR TensorRT_VERSION_STRING)
+find_package_handle_standard_args(TensorRT
+    REQUIRED_VARS TensorRT_nvinfer_LIBRARY TensorRT_nvonnxparser_LIBRARY TensorRT_INCLUDE_DIR
+    VERSION_VAR TensorRT_VERSION)
 
 if(TensorRT_FOUND)
-    set(TensorRT_INCLUDE_DIRS ${TensorRT_INCLUDE_DIR})
-
-    if(NOT TensorRT_LIBRARIES)
-        set(TensorRT_LIBRARIES ${TensorRT_LIBRARY} ${TensorRT_NVONNXPARSER_LIBRARY} ${TensorRT_NVPARSERS_LIBRARY})
+    if(TensorRT_VERSION VERSION_LESS "10.0" OR NOT TensorRT_VERSION VERSION_LESS "12.0")
+        message(FATAL_ERROR
+            "tensorrt_cpp_api requires TensorRT 10.0 - 11.x, but found ${TensorRT_VERSION} at "
+            "${TensorRT_INCLUDE_DIR}.\n"
+            "  Point -DTensorRT_DIR=<root> at a supported tarball, or install libnvinfer-dev from "
+            "the NVIDIA apt repo (scripts/install_deps.sh).")
     endif()
 
+    if(NOT TARGET TensorRT::nvonnxparser)
+        add_library(TensorRT::nvonnxparser UNKNOWN IMPORTED)
+        set_target_properties(TensorRT::nvonnxparser PROPERTIES IMPORTED_LOCATION "${TensorRT_nvonnxparser_LIBRARY}")
+    endif()
     if(NOT TARGET TensorRT::TensorRT)
         add_library(TensorRT::TensorRT UNKNOWN IMPORTED)
-        set_target_properties(TensorRT::TensorRT PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${TensorRT_INCLUDE_DIRS}")
-        set_property(TARGET TensorRT::TensorRT APPEND PROPERTY IMPORTED_LOCATION "${TensorRT_LIBRARY}")
+        set_target_properties(TensorRT::TensorRT PROPERTIES
+            IMPORTED_LOCATION "${TensorRT_nvinfer_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${TensorRT_INCLUDE_DIR}"
+            INTERFACE_LINK_LIBRARIES TensorRT::nvonnxparser)
     endif()
+    set(TensorRT_LIBRARIES ${TensorRT_nvinfer_LIBRARY} ${TensorRT_nvonnxparser_LIBRARY})
+    set(TensorRT_INCLUDE_DIRS ${TensorRT_INCLUDE_DIR})
 endif()
+
+mark_as_advanced(TensorRT_INCLUDE_DIR TensorRT_nvinfer_LIBRARY TensorRT_nvonnxparser_LIBRARY)

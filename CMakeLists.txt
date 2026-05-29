@@ -13,6 +13,8 @@ option(TRT_CPP_API_BUILD_PYTHON   "Build the pybind11 Python bindings (E15)"    
 option(TRT_CPP_API_WITH_OPENCV    "Build the optional OpenCV interop (E12/E13)" OFF)
 option(TRT_CPP_API_WITH_SPDLOG    "Build the optional spdlog logger adapter"    OFF)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
@@ -28,6 +30,11 @@ endif()
 # the E11 preprocessing kernels (.cu), at which point CUDA is enabled as a language.
 find_package(CUDAToolkit REQUIRED)
 
+# TensorRT (apt or tarball). Linked PRIVATE: nvinfer1 types never appear in public headers
+# (PImpl/forward-decl), so consumers need TRT at runtime but not at compile time. Pass
+# -DTensorRT_DIR=<root> for a tarball install.
+find_package(TensorRT REQUIRED)
+
 add_library(tensorrt_cpp_api)
 add_library(tensorrt_cpp_api::tensorrt_cpp_api ALIAS tensorrt_cpp_api)
 target_sources(tensorrt_cpp_api PRIVATE
@@ -35,8 +42,12 @@ target_sources(tensorrt_cpp_api PRIVATE
     src/logger.cpp
     src/cuda.cpp
     src/allocator.cpp
-    src/device_tensor.cpp)
-target_link_libraries(tensorrt_cpp_api PUBLIC CUDA::cudart)
+    src/device_tensor.cpp
+    src/detail/trt_common.cpp)
+target_include_directories(tensorrt_cpp_api PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(tensorrt_cpp_api
+    PUBLIC CUDA::cudart
+    PRIVATE TensorRT::TensorRT)
 target_include_directories(tensorrt_cpp_api PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)

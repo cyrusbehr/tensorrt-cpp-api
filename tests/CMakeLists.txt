@@ -29,3 +29,14 @@ add_executable(trtcpp_cuda_tests
     test_device_tensor.cpp)
 target_link_libraries(trtcpp_cuda_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api GTest::gtest_main)
 gtest_discover_tests(trtcpp_cuda_tests PROPERTIES LABELS "gpu")
+
+# White-box tests of the internal TensorRT glue (logger bridge, plugin loader). Need the
+# TRT runtime + headers and src/ on the include path; labeled "gpu".
+if(TARGET TensorRT::TensorRT)
+    add_executable(trtcpp_trt_tests
+        test_trt_logger.cpp
+        test_trt_plugin.cpp)
+    target_include_directories(trtcpp_trt_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(trtcpp_trt_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api TensorRT::TensorRT GTest::gtest_main)
+    gtest_discover_tests(trtcpp_trt_tests PROPERTIES LABELS "gpu")
+endif()

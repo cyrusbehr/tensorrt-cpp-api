@@ -24,7 +24,7 @@ Python-first API (Python is a thin binding over the C++ core); training; model e
 
 | Axis | Required | Notes |
 | --- | --- | --- |
-| TensorRT | **10.6 – 11.0** | build on 10.16.x today; code written to the 11.0 surface; legacy paths gated `#if NV_TENSORRT_MAJOR < 11`. A CMake-time error names the required range (community #41/#54). |
+| TensorRT | **10.0 – 11.x** | floor lowered to 10.0 in E4 (matches v6's stated minimum and the dev host's 10.0.0.6 tarball; every API used -- strongly-typed, enqueueV3, IPluginV3, the still-present calibrator -- exists since 10.0). Build on the available 10.x today; code written to the 11.0 surface; legacy paths gated `#if NV_TENSORRT_MAJOR < 11`. A CMake-time error names the required range (community #41/#54). |
 | CUDA | **12.4 – 13.x** | dev host uses 12.6 (driver 565 caps at 12.7); CI/fresh hosts 13.3. |
 | Compute capability | **>= 7.5** (Turing) | matches TRT 11 / CUDA 13 floor. Build `sm_86` here. |
 | Compiler | GCC >= 11, Clang >= 14 | **C++20** (corrected from C++17 in E1: the public API uses `std::span`, which is C++20; all target compilers support it, it is a superset of C++17 so the "OpenCV 5 needs C++17 min" forward-compat rationale still holds, and nvcc 12.x supports `-std=c++20`). |
@@ -550,7 +550,7 @@ We ship `cmake/tensorrt_cpp_api-config.cmake.in` that:
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")   # installed FindTensorRT.cmake
 include(CMakeFindDependencyMacro)
 find_dependency(CUDAToolkit 12.4)
-find_dependency(TensorRT 10.6)                               # custom module, installed alongside
+find_dependency(TensorRT 10.0)                               # custom module, installed alongside
 if(@TRT_CPP_API_WITH_OPENCV@)  find_dependency(OpenCV 4.9)   endif()
 if(@TRT_CPP_API_WITH_SPDLOG@)  find_dependency(spdlog)       endif()
 find_dependency(Threads)
@@ -576,7 +576,7 @@ those who want it.
 **Improved `FindTensorRT.cmake`** (relocatable when installed; no build-tree paths):
 searches the apt layout (`/usr/include/x86_64-linux-gnu`, `/usr/lib/...`) AND a
 tarball root (`TensorRT_DIR`), extracts the version from `NvInferVersion.h`, **errors
-outside the 10.6 – 11.0 range** with the exact required range in the message (community
+outside the 10.0 – 11.x range** with the exact required range in the message (community
 #41/#54), and builds an imported `TensorRT::TensorRT` carrying the include dir +
 `nvinfer` + `nvonnxparser` as INTERFACE properties. Drops the removed `nvparsers`
 (unlike v6's `FindTensorRT.cmake:73`). Uses `find_package(CUDAToolkit)` — never the
