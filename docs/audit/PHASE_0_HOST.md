@@ -60,3 +60,51 @@ this host:
 
 `sm_86` is the build/test compute capability; `CMAKE_CUDA_ARCHITECTURES` defaults
 to native but the install docs note the broader set a release should target.
+
+## Toolchain verification (Phase 0 pass-gate)
+
+The plan's Phase 0 gate is "prove the env can build TensorRT code for v7." Verified
+2026-05-29 with a TensorRT + CUDA smoke program (compile + link + run against
+TensorRT 10.0.0.6 + CUDA 12.6 + g++ 13.3):
+
+```
+cudaGetDeviceCount: no error, devices=1
+GPU0: NVIDIA GeForce RTX 3080 Laptop GPU  sm_86
+createInferBuilder: 0x...  TensorRT 10.0.0
+createNetworkV2(0): 0x...  nbInputs=0
+createParser(nvonnxparser): 0x...
+TOOLCHAIN OK
+```
+
+This exercises exactly what the v7 core needs: TRT headers compile, `nvinfer` +
+`nvonnxparser` link, the builder/parser instantiate, CUDA sees the GPU. The only
+compiler output is the expected TRT-header deprecation warnings (`IGpuAllocator::
+allocate`/`deallocate` -> use the `*Async` variants — already reflected in the E3
+stream-ordered allocator design).
+
+### Deviation: the current v6 repo does NOT build on this host as-is
+
+Not because of the TRT/CUDA toolchain (verified above) but because the **OpenCV-CUDA
+build at `/usr/local` has drifted from the current CUDA/cuDNN**:
+
+- It was compiled against **CUDA 12.0 + cuDNN 8.9.7** (`OpenCVConfig.cmake:99,104`); the
+  host now has CUDA 12.6 + cuDNN 9.6.0. `OpenCVConfig.cmake:110` does a hard
+  `VERSION_EQUAL` check and aborts: *"OpenCV ... was compiled with CUDA 12.0 ... rebuild
+  with CUDA 12.6."*
+- Even bypassing that, only `libcudnn.so.9` exists while `libopencv_dnn.so.4.8.0`
+  hard-links the absent `libcudnn.so.8` (cuDNN 8->9 is an ABI break). v6's blanket
+  `find_package(OpenCV)` pulls `libopencv_dnn` into `${OpenCV_LIBS}`, so the link/load
+  fails.
+
+This is, ironically, a textbook instance of the environment fragility the rewrite
+targets (community #45/#46 CUDA-version mismatch, #32/#52/#84 OpenCV-CUDA pain). The
+deliberate decision (justified per the plan's "route around the blocker" rule) is to
+**not** rebuild OpenCV-CUDA just to reproduce a v6 build, because:
+
+1. It would require a second sudo gate (install to `/usr/local`) plus a long source
+   build, for a dependency **v7 removes as a hard requirement** (Phase D / Phase B).
+2. The toolchain that v7 actually depends on (CUDA + TensorRT + compiler) is verified
+   above; the OpenCV drift is orthogonal to it.
+3. v7's engine core compiles against CUDA + TensorRT only and never links OpenCV, so
+   this drift cannot block the v7 build — the new `install_deps.sh`/`verify_deps.sh` +
+   optional-OpenCV design are precisely the fix.
