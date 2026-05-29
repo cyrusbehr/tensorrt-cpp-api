@@ -18,14 +18,15 @@ using namespace trtcpp;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "usage: %s <model.onnx|engine> [iters=200]\n", argv[0]);
+        std::fprintf(stderr, "usage: %s <model.onnx|engine> [iters=200] [precision=fp16|fp32|int8]\n", argv[0]);
         return 2;
     }
     const std::string modelPath = argv[1];
     const int iters = argc > 2 ? std::atoi(argv[2]) : 200;
+    const std::string prec = argc > 3 ? argv[3] : "fp16";
 
     BuildOptions bo;
-    bo.precision = Precision::kFp16;
+    bo.precision = prec == "fp32" ? Precision::kFp32 : prec == "int8" ? Precision::kInt8Qdq : Precision::kFp16;
     bo.engineCacheDir = "engines";
     auto engine = EngineBuilder{}.buildAndLoad(modelPath, bo);
     if (!engine) {

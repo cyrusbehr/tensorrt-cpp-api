@@ -71,6 +71,26 @@ int main() {
   inference. See [`examples/python`](examples/python).
 - **Installable.** `cmake --install` produces a `find_package(tensorrt_cpp_api)`-consumable package.
 
+## Performance
+
+Single-stream inference latency on an **RTX 3080 Laptop GPU** (preallocated, zero-copy `enqueue`
+loop — `examples/benchmark`), TensorRT 10:
+
+| Model | Precision | Latency | Throughput |
+|---|---|---|---|
+| YOLOv8n | FP16 | 1.07 ms | 937 inf/s |
+| YOLOv8n | FP32 | 2.00 ms | 499 inf/s |
+| MobileNetV2 | FP16 | 0.31 ms | 3199 inf/s |
+
+Inference time is TensorRT-bound — it is the `enqueueV3` cost of the engine, so the wrapper adds
+**no** inference overhead (v6 and v7 run the identical engine on identical hardware in the same
+time). v7's gains are on the host side and in safety: zero-copy name-keyed IO with no per-call
+allocations or nested-vector copies, a stream-ordered allocator, and the no-throw `Status`/`Result`
+API. The Python bindings run the same path within ~13% of C++ (`examples/python/benchmark_parity.py`).
+
+> For reference, v6's published figures (a weaker RTX 3050 Ti Laptop GPU) were YOLOv8n FP16
+> 2.49 ms / FP32 4.73 ms; the headline difference above is the GPU, not the wrapper.
+
 ## Install
 
 TensorRT and CUDA are system/externally provided. In brief:
