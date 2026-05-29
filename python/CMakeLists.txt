@@ -25,18 +25,19 @@ else()
     # In-tree dev build: stage the extension inside the source package so `import trtcpp`
     # (with PYTHONPATH=<repo>/python) resolves `from ._core import ...`. The staged .so is
     # gitignored (*.so).
-    add_custom_command(TARGET _core POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:_core>
-                ${CMAKE_CURRENT_SOURCE_DIR}/trtcpp/$<TARGET_FILE_NAME:_core>
-        COMMENT "Staging trtcpp._core into the source package for in-tree pytest")
+    add_custom_command(
+        TARGET _core POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:_core>
+                                        ${CMAKE_CURRENT_SOURCE_DIR}/trtcpp/$<TARGET_FILE_NAME:_core>
+        COMMENT "Staging trtcpp._core into the source package for in-tree pytest"
+    )
 
     if(TRT_CPP_API_BUILD_TESTS)
         find_program(PYTEST_EXECUTABLE NAMES pytest)
         if(PYTEST_EXECUTABLE)
             add_test(NAME python_bindings COMMAND ${PYTEST_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests -q)
-            set_tests_properties(python_bindings PROPERTIES
-                ENVIRONMENT "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}"
-                LABELS "gpu;python")
+            set_tests_properties(
+                python_bindings PROPERTIES ENVIRONMENT "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}" LABELS "gpu;python"
+            )
         else()
             message(STATUS "pytest not found; skipping the python_bindings test")
         endif()

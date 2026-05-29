@@ -1,0 +1,15 @@
+# cmake-format config (used by the pre-commit cmake-format hook). Tuned to the repo's existing
+# CMake style: a generous line width so the hand-wrapped install()/target_* calls are not
+# reflowed, lowercase commands, and dangling close-parens for multi-line calls.
+format:
+  line_width: 130
+  tab_size: 4
+  separate_ctrl_name_with_space: false
+  separate_fn_name_with_space: false
+  dangle_parens: true
+  command_case: lower
+  keyword_case: upper
+  max_subgroups_hwrap: 4
+  max_pargs_hwrap: 6
+markup:
+  enable_markup: false

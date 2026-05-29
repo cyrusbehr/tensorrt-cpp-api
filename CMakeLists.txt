@@ -6,12 +6,12 @@ project(tensorrt_cpp_api VERSION 7.0.0 LANGUAGES CXX)
 # the preprocessing sublib, OpenCV interop, install/export, and Python bindings are
 # wired up in later E phases. All optional components default OFF.
 
-option(TRT_CPP_API_BUILD_TESTS    "Build unit/integration tests"                OFF)
-option(TRT_CPP_API_BUILD_EXAMPLES "Build reference examples"                    OFF)
-option(TRT_CPP_API_BUILD_PREPROC  "Build the preprocessing sublibrary (E11)"    ON)
-option(TRT_CPP_API_BUILD_PYTHON   "Build the pybind11 Python bindings (E15)"    OFF)
-option(TRT_CPP_API_WITH_OPENCV    "Build the optional OpenCV interop (E12/E13)" OFF)
-option(TRT_CPP_API_WITH_SPDLOG    "Build the optional spdlog logger adapter"    OFF)
+option(TRT_CPP_API_BUILD_TESTS "Build unit/integration tests" OFF)
+option(TRT_CPP_API_BUILD_EXAMPLES "Build reference examples" OFF)
+option(TRT_CPP_API_BUILD_PREPROC "Build the preprocessing sublibrary (E11)" ON)
+option(TRT_CPP_API_BUILD_PYTHON "Build the pybind11 Python bindings (E15)" OFF)
+option(TRT_CPP_API_WITH_OPENCV "Build the optional OpenCV interop (E12/E13)" OFF)
+option(TRT_CPP_API_WITH_SPDLOG "Build the optional spdlog logger adapter" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -53,42 +53,44 @@ find_package(Threads REQUIRED)
 
 # Generate build_config.h recording the library + TensorRT versions, so public headers can
 # version-gate (e.g. the legacy calibrator) without including a TensorRT header.
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_config.h.in
-               ${CMAKE_CURRENT_BINARY_DIR}/generated/tensorrt_cpp_api/build_config.h @ONLY)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_config.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/tensorrt_cpp_api/build_config.h
+    @ONLY
+)
 
 add_library(tensorrt_cpp_api)
 add_library(tensorrt_cpp_api::tensorrt_cpp_api ALIAS tensorrt_cpp_api)
-target_sources(tensorrt_cpp_api PRIVATE
-    src/core.cpp
-    src/logger.cpp
-    src/cuda.cpp
-    src/allocator.cpp
-    src/device_tensor.cpp
-    src/engine_builder.cpp
-    src/engine.cpp
-    src/engine_pool.cpp
-    src/calibrator.cpp
-    src/detail/buffers.cpp
-    src/detail/calibrator_bridge.cpp
-    src/detail/engine_cache.cpp
-    src/detail/execution.cpp
-    src/detail/sha256.cpp
-    src/detail/trt_common.cpp)
+target_sources(
+    tensorrt_cpp_api
+    PRIVATE src/core.cpp
+            src/logger.cpp
+            src/cuda.cpp
+            src/allocator.cpp
+            src/device_tensor.cpp
+            src/engine_builder.cpp
+            src/engine.cpp
+            src/engine_pool.cpp
+            src/calibrator.cpp
+            src/detail/buffers.cpp
+            src/detail/calibrator_bridge.cpp
+            src/detail/engine_cache.cpp
+            src/detail/execution.cpp
+            src/detail/sha256.cpp
+            src/detail/trt_common.cpp
+)
 target_include_directories(tensorrt_cpp_api PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(tensorrt_cpp_api
-    PUBLIC CUDA::cudart
-    PRIVATE TensorRT::TensorRT Threads::Threads)
+target_link_libraries(tensorrt_cpp_api PUBLIC CUDA::cudart PRIVATE TensorRT::TensorRT Threads::Threads)
 # Build-tree include roots only. The install-tree include dir is supplied once by the
 # INCLUDES DESTINATION of install(TARGETS) below (both the public headers and the generated
 # build_config.h land under the same <prefix>/include tree), so no $<INSTALL_INTERFACE> here.
-target_include_directories(tensorrt_cpp_api PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>)
+target_include_directories(
+    tensorrt_cpp_api PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                            $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
+)
 target_compile_features(tensorrt_cpp_api PUBLIC cxx_std_20)
-set_target_properties(tensorrt_cpp_api PROPERTIES
-    CXX_EXTENSIONS OFF
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR})
+set_target_properties(
+    tensorrt_cpp_api PROPERTIES CXX_EXTENSIONS OFF VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR}
+)
 if(NOT MSVC)
     target_compile_options(tensorrt_cpp_api PRIVATE -Wall -Wextra)
 endif()
@@ -126,13 +128,15 @@ if(TRT_CPP_API_BUILD_PREPROC)
     add_library(tensorrt_cpp_api::preproc ALIAS tensorrt_cpp_api_preproc)
     target_link_libraries(tensorrt_cpp_api_preproc PUBLIC tensorrt_cpp_api::tensorrt_cpp_api CUDA::cudart)
     target_compile_features(tensorrt_cpp_api_preproc PUBLIC cxx_std_20)
-    set_target_properties(tensorrt_cpp_api_preproc PROPERTIES
-        CUDA_STANDARD 20
-        CUDA_STANDARD_REQUIRED ON
-        CXX_EXTENSIONS OFF
-        EXPORT_NAME preproc # consumers link tensorrt_cpp_api::preproc (matches the in-tree alias)
-        VERSION ${PROJECT_VERSION}
-        SOVERSION ${PROJECT_VERSION_MAJOR})
+    set_target_properties(
+        tensorrt_cpp_api_preproc
+        PROPERTIES CUDA_STANDARD 20
+                   CUDA_STANDARD_REQUIRED ON
+                   CXX_EXTENSIONS OFF
+                   EXPORT_NAME preproc # consumers link tensorrt_cpp_api::preproc (matches the in-tree alias)
+                   VERSION ${PROJECT_VERSION}
+                   SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
 endif()
 
 # Python bindings (E15). Added after the core/preproc targets exist so the extension can link
@@ -151,38 +155,44 @@ endif()
 # Skipped under scikit-build-core (SKBUILD): a Python wheel must contain only the Python package
 # and the compiled extension, not the C++ dev headers / static libs / CMake package config.
 if(NOT SKBUILD)
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-set(TRTCPP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_LIBDIR}/cmake/tensorrt_cpp_api)
+    include(GNUInstallDirs)
+    include(CMakePackageConfigHelpers)
+    set(TRTCPP_INSTALL_CMAKEDIR ${CMAKE_INSTALL_LIBDIR}/cmake/tensorrt_cpp_api)
 
-set(TRTCPP_INSTALL_TARGETS tensorrt_cpp_api)
-if(TARGET tensorrt_cpp_api_preproc)
-    list(APPEND TRTCPP_INSTALL_TARGETS tensorrt_cpp_api_preproc)
-endif()
+    set(TRTCPP_INSTALL_TARGETS tensorrt_cpp_api)
+    if(TARGET tensorrt_cpp_api_preproc)
+        list(APPEND TRTCPP_INSTALL_TARGETS tensorrt_cpp_api_preproc)
+    endif()
 
-install(TARGETS ${TRTCPP_INSTALL_TARGETS}
-    EXPORT tensorrt_cpp_apiTargets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    install(
+        TARGETS ${TRTCPP_INSTALL_TARGETS}
+        EXPORT tensorrt_cpp_apiTargets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
 
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/tensorrt_cpp_api/build_config.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tensorrt_cpp_api)
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindTensorRT.cmake DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/tensorrt_cpp_api/build_config.h
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tensorrt_cpp_api
+    )
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindTensorRT.cmake DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
 
-install(EXPORT tensorrt_cpp_apiTargets NAMESPACE tensorrt_cpp_api:: DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
+    install(EXPORT tensorrt_cpp_apiTargets NAMESPACE tensorrt_cpp_api:: DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
 
-configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tensorrt_cpp_api-config.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config.cmake
-    INSTALL_DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
-write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config-version.cmake
-    VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config-version.cmake
-    DESTINATION ${TRTCPP_INSTALL_CMAKEDIR})
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/tensorrt_cpp_api-config.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config.cmake INSTALL_DESTINATION ${TRTCPP_INSTALL_CMAKEDIR}
+    )
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config-version.cmake VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config.cmake
+                  ${CMAKE_CURRENT_BINARY_DIR}/tensorrt_cpp_api-config-version.cmake DESTINATION ${TRTCPP_INSTALL_CMAKEDIR}
+    )
 endif() # NOT SKBUILD
 
 if(TRT_CPP_API_BUILD_TESTS)
