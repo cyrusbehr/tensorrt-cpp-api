@@ -50,3 +50,10 @@ if(TARGET TensorRT::TensorRT)
     target_link_libraries(trtcpp_trt_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api TensorRT::TensorRT GTest::gtest_main)
     gtest_discover_tests(trtcpp_trt_tests PROPERTIES LABELS "gpu")
 endif()
+
+# Preprocessing kernel tests (need a GPU; no TRT).
+if(TARGET tensorrt_cpp_api::preproc)
+    add_executable(trtcpp_preproc_tests test_preproc.cpp)
+    target_link_libraries(trtcpp_preproc_tests PRIVATE tensorrt_cpp_api::preproc GTest::gtest_main)
+    gtest_discover_tests(trtcpp_preproc_tests PROPERTIES LABELS "gpu")
+endif()

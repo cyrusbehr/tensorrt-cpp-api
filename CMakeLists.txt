@@ -8,7 +8,7 @@ project(tensorrt_cpp_api VERSION 7.0.0 LANGUAGES CXX)
 
 option(TRT_CPP_API_BUILD_TESTS    "Build unit/integration tests"                OFF)
 option(TRT_CPP_API_BUILD_EXAMPLES "Build reference examples"                    OFF)
-option(TRT_CPP_API_BUILD_PREPROC  "Build the preprocessing sublibrary (E11)"    OFF)
+option(TRT_CPP_API_BUILD_PREPROC  "Build the preprocessing sublibrary (E11)"    ON)
 option(TRT_CPP_API_BUILD_PYTHON   "Build the pybind11 Python bindings (E15)"    OFF)
 option(TRT_CPP_API_WITH_OPENCV    "Build the optional OpenCV interop (E12/E13)" OFF)
 option(TRT_CPP_API_WITH_SPDLOG    "Build the optional spdlog logger adapter"    OFF)
@@ -81,6 +81,25 @@ if(TRT_CPP_API_WITH_SPDLOG)
     find_package(spdlog REQUIRED)
     target_link_libraries(tensorrt_cpp_api PUBLIC spdlog::spdlog)
     target_compile_definitions(tensorrt_cpp_api PUBLIC TRT_CPP_API_WITH_SPDLOG)
+endif()
+
+# Optional preprocessing sublibrary (E11): one fused CUDA (.cu) kernel. Separate target --
+# the engine core does NOT depend on it. Enabling it turns on the CUDA language (needs nvcc).
+if(TRT_CPP_API_BUILD_PREPROC)
+    enable_language(CUDA)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES 75-real 80-real 86-real 89-real 90-virtual)
+    endif()
+    add_library(tensorrt_cpp_api_preproc src/preproc.cu)
+    add_library(tensorrt_cpp_api::preproc ALIAS tensorrt_cpp_api_preproc)
+    target_link_libraries(tensorrt_cpp_api_preproc PUBLIC tensorrt_cpp_api::tensorrt_cpp_api CUDA::cudart)
+    target_compile_features(tensorrt_cpp_api_preproc PUBLIC cxx_std_20)
+    set_target_properties(tensorrt_cpp_api_preproc PROPERTIES
+        CUDA_STANDARD 20
+        CUDA_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR})
 endif()
 
 if(TRT_CPP_API_BUILD_TESTS)
