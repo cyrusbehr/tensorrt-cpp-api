@@ -51,6 +51,13 @@ if(TARGET TensorRT::TensorRT)
     gtest_discover_tests(trtcpp_trt_tests PROPERTIES LABELS "gpu")
 endif()
 
+# Optional OpenCV interop tests (only when WITH_OPENCV; need a working OpenCV-CUDA + GPU).
+if(TRT_CPP_API_WITH_OPENCV)
+    add_executable(trtcpp_opencv_tests test_opencv_interop.cpp)
+    target_link_libraries(trtcpp_opencv_tests PRIVATE tensorrt_cpp_api::tensorrt_cpp_api ${OpenCV_LIBS} GTest::gtest_main)
+    gtest_discover_tests(trtcpp_opencv_tests PROPERTIES LABELS "gpu")
+endif()
+
 # Preprocessing kernel tests (need a GPU; no TRT).
 if(TARGET tensorrt_cpp_api::preproc)
     add_executable(trtcpp_preproc_tests test_preproc.cpp)

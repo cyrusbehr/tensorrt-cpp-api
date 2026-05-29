@@ -83,6 +83,17 @@ if(TRT_CPP_API_WITH_SPDLOG)
     target_compile_definitions(tensorrt_cpp_api PUBLIC TRT_CPP_API_WITH_SPDLOG)
 endif()
 
+# Optional OpenCV interop (E12/E13). Requests only the `core` module (which carries cv::Mat
+# and cv::cuda::GpuMat) to avoid pulling opencv_dnn and its cuDNN dependency. Strictly
+# opt-in; the engine core has no OpenCV in any non-gated header.
+if(TRT_CPP_API_WITH_OPENCV)
+    find_package(OpenCV REQUIRED COMPONENTS core)
+    target_sources(tensorrt_cpp_api PRIVATE src/opencv_interop.cpp)
+    target_link_libraries(tensorrt_cpp_api PUBLIC ${OpenCV_LIBS})
+    target_include_directories(tensorrt_cpp_api PUBLIC ${OpenCV_INCLUDE_DIRS})
+    target_compile_definitions(tensorrt_cpp_api PUBLIC TRT_CPP_API_WITH_OPENCV)
+endif()
+
 # Optional preprocessing sublibrary (E11): one fused CUDA (.cu) kernel. Separate target --
 # the engine core does NOT depend on it. Enabling it turns on the CUDA language (needs nvcc).
 if(TRT_CPP_API_BUILD_PREPROC)
