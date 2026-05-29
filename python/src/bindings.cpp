@@ -191,7 +191,11 @@ void requireContiguousBytes(const std::vector<std::int64_t> &dims, DType dtype, 
         if (strides[static_cast<std::size_t>(i)] != expected) {
             throw py::value_error("TensorRT IO requires a C-contiguous array (non-contiguous strides given)");
         }
-        expected *= dims[static_cast<std::size_t>(i)];
+        // Overflow-checked: a malformed/huge shape from a foreign __cuda_array_interface__ must not
+        // wrap `expected` into a value that spuriously matches a later stride.
+        if (__builtin_mul_overflow(expected, dims[static_cast<std::size_t>(i)], &expected)) {
+            throw py::value_error("__cuda_array_interface__ shape is too large (stride overflow)");
+        }
     }
 }
 
@@ -235,13 +239,12 @@ TensorView viewFromDlpack(py::handle obj) {
         // DLPack strides are in ELEMENTS.
         std::int64_t expected = 1;
         for (int i = dt.ndim - 1; i >= 0; --i) {
-            if (dt.strides[i] != expected) {
+            if (dt.strides[i] != expected || __builtin_mul_overflow(expected, dims[static_cast<std::size_t>(i)], &expected)) {
                 if (mt->deleter) {
                     mt->deleter(mt);
                 }
-                throw py::value_error("TensorRT IO requires a C-contiguous DLPack tensor");
+                throw py::value_error("TensorRT IO requires a C-contiguous DLPack tensor (or shape too large)");
             }
-            expected *= dims[static_cast<std::size_t>(i)];
         }
     }
     void *data = static_cast<char *>(dt.data) + dt.byte_offset;

@@ -37,7 +37,12 @@ Result<TensorView> viewOf(const cv::cuda::GpuMat &mat, Layout layout) {
         return Status{StatusCode::kUnsupported, "non-continuous GpuMat (padded rows); clone() to a continuous buffer first"};
     }
     Shape shape{mat.rows, mat.cols, mat.channels()};
-    return TensorView{mat.cudaPtr(), dtype.value(), std::move(shape), Device::kCuda, 0, layout};
+    // The GpuMat lives on the current CUDA device (OpenCV allocates on it); record that rather
+    // than hardcoding device 0, so a multi-GPU caller's downstream copyFrom/enqueue targets the
+    // right device.
+    int device = 0;
+    cudaGetDevice(&device);
+    return TensorView{mat.cudaPtr(), dtype.value(), std::move(shape), Device::kCuda, device, layout};
 }
 
 Result<TensorView> viewOf(const cv::Mat &mat, Layout layout) {

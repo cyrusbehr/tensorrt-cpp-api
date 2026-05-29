@@ -24,7 +24,11 @@ bool Int8CalibratorBridge::getBatch(void *bindings[], const char *names[], int32
             return false; // calibrator's input name not among the bindings
         }
         if (!calibrator_->nextBatch(inputs, stream_)) {
-            return false; // no more batches
+            // No more batches (or the provider errored). nextBatch may have queued async work on
+            // stream_ before failing, so drain it before returning -- otherwise a late DMA could
+            // write into a binding buffer TRT no longer expects to be touched.
+            stream_.synchronize();
+            return false;
         }
         return stream_.synchronize().ok(); // the buffer must be filled before TRT reads it
     } catch (...) {

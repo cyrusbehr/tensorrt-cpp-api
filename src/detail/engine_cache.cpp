@@ -134,8 +134,13 @@ Status writeAtomic(const std::string &path, std::span<const std::byte> bytes) {
         if (!bytes.empty()) {
             out.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         }
+        // Flush + close explicitly and check the result BEFORE the rename: a buffered write can
+        // succeed here yet fail on the destructor's implicit flush (e.g. disk full), which would
+        // otherwise rename a truncated temp file over the cache. Catch that failure first.
+        out.close();
         if (!out) {
-            return Status{StatusCode::kIoError, "write failed: " + tmp.string()};
+            std::filesystem::remove(tmp, ec);
+            return Status{StatusCode::kIoError, "write/flush failed: " + tmp.string()};
         }
     }
     std::filesystem::rename(tmp, target, ec);
