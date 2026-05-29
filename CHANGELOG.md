@@ -1,9 +1,10 @@
 # Changelog
 
-## v7.0.0 (unreleased)
+## v7.0.0-rc1 (2026-05-29)
 
-A ground-up rewrite into a reusable, installable C++ library. **This is a clean break from v6 —
-the API is not source-compatible.** See [docs/upgrading_from_v6.md](docs/upgrading_from_v6.md).
+First release candidate of the v7 rewrite — a ground-up reimplementation into a reusable,
+installable C++ library. **This is a clean break from v6 — the API is not source-compatible.**
+See [docs/upgrading_from_v6.md](docs/upgrading_from_v6.md).
 
 ### Added
 - No-throw API: every fallible call returns `Status` or `Result<T>` (no exceptions); `TRTCPP_TRY`
@@ -36,8 +37,14 @@ the API is not source-compatible.** See [docs/upgrading_from_v6.md](docs/upgradi
   `tensorrt_cpp_api::tensorrt_cpp_api`.
 
 ### Removed
-- The v6 monolithic templated `Engine<T>`, the OpenCV-in-the-signature API, the CLI benchmark
-  executable, and the v6 header layout. No source-compatibility shim (see the upgrade guide).
+- The v6 API in its entirety — no source-compatibility shim (see the upgrade guide):
+  - the monolithic templated `Engine<T>` and its `.inl`-in-header implementation;
+  - the single `Options` struct, replaced by `BuildOptions` + `EngineOptions`;
+  - OpenCV `cv::cuda::GpuMat` in the inference signatures and the triply-nested `std::vector`
+    inputs/outputs, replaced by name-keyed `TensorView`/`Tensor`;
+  - `bool`/exception error handling, replaced by `Status`/`Result<T>`;
+  - per-call stream creation, replaced by caller-owned `Stream`;
+  - the `run_inference_benchmark` CLI executable and the v6 `include/` header layout.
 
 ---
 

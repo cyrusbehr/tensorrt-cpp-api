@@ -218,7 +218,10 @@ Result<std::string> EngineBuilder::buildOrLoad(const std::string &onnxPath, cons
         auto meta = detail::readSidecar(sidecarPath.string());
         // A hardware-compatible (Ampere-plus) engine must not be reused on a pre-Ampere GPU
         // even though the UUID check is relaxed -- gate on the loading GPU's compute capability.
-        const bool hardwareFloorOk = !options.hardwareCompatible || device.value().computeMajor >= 8;
+        // Gate on whether the CACHED engine was built hardware-compatible (the sidecar flag), not
+        // the current request: the safety property belongs to the artifact on disk, independent of
+        // the filename convention that led us here.
+        const bool hardwareFloorOk = !meta || !meta.value().hardwareCompatible || device.value().computeMajor >= 8;
         if (meta && hardwareFloorOk && detail::isFresh(meta.value(), expected, options.versionCompatible, options.hardwareCompatible)) {
             return enginePath.string(); // fresh cache hit
         }
