@@ -11,7 +11,7 @@ namespace {
 /// perturbing process-wide allocation state.
 class StreamOrderedAllocator final : public IDeviceAllocator {
 public:
-    explicit StreamOrderedAllocator(int deviceIndex) : deviceIndex_(deviceIndex) {
+    explicit StreamOrderedAllocator(int deviceIndex) {
         cudaMemPoolProps props{};
         props.allocType = cudaMemAllocationTypePinned;
         props.handleTypes = cudaMemHandleTypeNone;
@@ -47,7 +47,6 @@ public:
     }
 
 private:
-    int deviceIndex_;
     cudaMemPool_t pool_ = nullptr;
 };
 
