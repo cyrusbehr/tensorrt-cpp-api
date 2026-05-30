@@ -13,7 +13,8 @@ concurrency:
 jobs:
   # Build + the non-GPU test suite. GitHub-hosted runners have no NVIDIA GPU, so we compile against
   # the CUDA/TensorRT headers and run only `ctest -LE gpu`. The CUDA + TensorRT toolchain comes from
-  # the pinned composite action (.github/actions/setup-trt).
+  # the pinned composite action (.github/actions/setup-trt). The excluded GPU-labeled integration
+  # tests run via the manual-dispatch `gpu tests` workflow (.github/workflows/gpu-tests.yml).
   build-cpu:
     name: build + cpu tests (ubuntu-24.04)
     runs-on: ubuntu-24.04
@@ -73,18 +74,3 @@ jobs:
           pip install . -v --config-settings=cmake.define.CMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc
       - name: Import sanity
         run: python -c "import trtcpp; print(trtcpp.version_string()); assert trtcpp.library_version()[0] == 7"
-
-  # Full GPU suite. GitHub-hosted runners have no GPU, so this is manual-dispatch only and expects a
-  # self-hosted runner labeled [self-hosted, gpu]. Left here as a documented stub.
-  gpu-tests:
-    name: gpu tests (self-hosted)
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: [self-hosted, gpu]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure + build
-        run: |
-          cmake -S . -B build -DTRT_CPP_API_BUILD_TESTS=ON
-          cmake --build build -j4
-      - name: Full test suite
-        run: ctest --test-dir build --output-on-failure

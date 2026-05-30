@@ -1,0 +1,21 @@
+name: gpu tests
+
+# Manual-dispatch only. GitHub-hosted runners have no NVIDIA GPU, so the GPU-labeled CUDA /
+# TensorRT / OpenCV / preproc integration tests are excluded from PR CI (ctest -LE gpu). Run this
+# workflow from the Actions tab on a self-hosted runner labeled [self-hosted, gpu] to exercise the
+# full suite. It is intentionally not attached to pull_request, so it adds no per-PR check.
+on:
+  workflow_dispatch:
+
+jobs:
+  gpu-tests:
+    name: gpu tests (self-hosted)
+    runs-on: [self-hosted, gpu]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure + build
+        run: |
+          cmake -S . -B build -DTRT_CPP_API_BUILD_TESTS=ON
+          cmake --build build -j4
+      - name: Full test suite
+        run: ctest --test-dir build --output-on-failure
