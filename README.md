@@ -82,14 +82,11 @@ loop — `examples/benchmark`), TensorRT 10:
 | YOLOv8n | FP32 | 2.00 ms | 499 inf/s |
 | MobileNetV2 | FP16 | 0.31 ms | 3199 inf/s |
 
-Inference time is TensorRT-bound — it is the `enqueueV3` cost of the engine, so the wrapper adds
-**no** inference overhead (v6 and v7 run the identical engine on identical hardware in the same
-time). v7's gains are on the host side and in safety: zero-copy name-keyed IO with no per-call
-allocations or nested-vector copies, a stream-ordered allocator, and the no-throw `Status`/`Result`
-API. The Python bindings run the same path within ~13% of C++ (`examples/python/benchmark_parity.py`).
-
-> For reference, v6's published figures (a weaker RTX 3050 Ti Laptop GPU) were YOLOv8n FP16
-> 2.49 ms / FP32 4.73 ms; the headline difference above is the GPU, not the wrapper.
+Inference time is TensorRT-bound — it is the `enqueueV3` cost of the engine itself, so the wrapper
+adds **no** measurable inference overhead. The library's work is everything around that call:
+zero-copy name-keyed IO with no per-call allocations or nested-vector copies, a stream-ordered
+allocator, and the no-throw `Status`/`Result` API. The Python bindings run the same path within
+~13% of C++ (`examples/python/benchmark_parity.py`).
 
 ## Install
 
