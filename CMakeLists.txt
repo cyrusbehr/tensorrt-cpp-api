@@ -1,16 +1,15 @@
 cmake_minimum_required(VERSION 3.22)
 project(tensorrt_cpp_api VERSION 7.0.0 LANGUAGES CXX)
 
-# v7 rewrite. The build system grows by phase (see docs/design/PHASE_D_DESIGN.md);
-# this is the E1 stage: a dependency-free core-types library + tests. CUDA/TensorRT,
-# the preprocessing sublib, OpenCV interop, install/export, and Python bindings are
-# wired up in later E phases. All optional components default OFF.
+# The engine core depends only on CUDA + TensorRT. The preprocessing sublibrary, OpenCV interop,
+# Python bindings, tests, and examples are independent, opt-in components; all default OFF except
+# the preprocessing sublibrary.
 
 option(TRT_CPP_API_BUILD_TESTS "Build unit/integration tests" OFF)
 option(TRT_CPP_API_BUILD_EXAMPLES "Build reference examples" OFF)
-option(TRT_CPP_API_BUILD_PREPROC "Build the preprocessing sublibrary (E11)" ON)
-option(TRT_CPP_API_BUILD_PYTHON "Build the pybind11 Python bindings (E15)" OFF)
-option(TRT_CPP_API_WITH_OPENCV "Build the optional OpenCV interop (E12/E13)" OFF)
+option(TRT_CPP_API_BUILD_PREPROC "Build the fused preprocessing sublibrary" ON)
+option(TRT_CPP_API_BUILD_PYTHON "Build the pybind11 Python bindings" OFF)
+option(TRT_CPP_API_WITH_OPENCV "Build the optional OpenCV interop" OFF)
 option(TRT_CPP_API_WITH_SPDLOG "Build the optional spdlog logger adapter" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -33,7 +32,7 @@ endif()
 
 # CUDA runtime: a hard dependency of the engine core (streams, allocation, Tensor cross
 # the public API). Plain C++ against the CUDA runtime API -- nvcc is only needed later for
-# the E11 preprocessing kernels (.cu), at which point CUDA is enabled as a language.
+# the preprocessing kernels (.cu), at which point CUDA is enabled as a language.
 find_package(CUDAToolkit REQUIRED)
 
 # TensorRT (apt or tarball). Linked PRIVATE: nvinfer1 types never appear in public headers
@@ -93,7 +92,7 @@ if(NOT MSVC)
     target_compile_options(tensorrt_cpp_api PRIVATE -Wall -Wextra)
 endif()
 
-# Optional spdlog logger adapter (E2). PUBLIC so makeSpdlogLogger() is declared and
+# Optional spdlog logger adapter. PUBLIC so makeSpdlogLogger() is declared and
 # spdlog is linked for consumers of a spdlog-enabled install.
 if(TRT_CPP_API_WITH_SPDLOG)
     find_package(spdlog REQUIRED)
@@ -101,7 +100,7 @@ if(TRT_CPP_API_WITH_SPDLOG)
     target_compile_definitions(tensorrt_cpp_api PUBLIC TRT_CPP_API_WITH_SPDLOG)
 endif()
 
-# Optional OpenCV interop (E12/E13). Requests only the `core` module (which carries cv::Mat
+# Optional OpenCV interop. Requests only the `core` module (which carries cv::Mat
 # and cv::cuda::GpuMat) to avoid pulling opencv_dnn and its cuDNN dependency. Strictly
 # opt-in; the engine core has no OpenCV in any non-gated header.
 if(TRT_CPP_API_WITH_OPENCV)
@@ -112,7 +111,7 @@ if(TRT_CPP_API_WITH_OPENCV)
     target_compile_definitions(tensorrt_cpp_api PUBLIC TRT_CPP_API_WITH_OPENCV)
 endif()
 
-# Optional preprocessing sublibrary (E11): one fused CUDA (.cu) kernel. Separate target --
+# Optional preprocessing sublibrary: one fused CUDA (.cu) kernel. Separate target --
 # the engine core does NOT depend on it. Enabling it turns on the CUDA language (needs nvcc).
 if(TRT_CPP_API_BUILD_PREPROC)
     # Architectures must be set BEFORE enable_language(CUDA): CMake validates the variable
@@ -138,13 +137,13 @@ if(TRT_CPP_API_BUILD_PREPROC)
     )
 endif()
 
-# Python bindings (E15). Added after the core/preproc targets exist so the extension can link
+# Python bindings. Added after the core/preproc targets exist so the extension can link
 # them. The subdirectory builds trtcpp._core.
 if(TRT_CPP_API_BUILD_PYTHON)
     add_subdirectory(python)
 endif()
 
-# Reference examples (F). Normally built standalone against the installed package; this in-tree
+# Reference examples. Normally built standalone against the installed package; this in-tree
 # path is a convenience that reuses the just-built targets.
 if(TRT_CPP_API_BUILD_EXAMPLES)
     add_subdirectory(examples)

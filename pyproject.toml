@@ -40,4 +40,4 @@ TRT_CPP_API_BUILD_TESTS = "OFF"
 TRT_CPP_API_BUILD_EXAMPLES = "OFF"
 
 [tool.scikit-build.sdist]
-exclude = [".github", "build", "engines", "models", "inputs", "images", "docs/audit"]
+exclude = [".github", "build", "engines", "models", "inputs", "images"]

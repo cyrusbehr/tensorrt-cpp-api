@@ -1,10 +1,10 @@
-# Python bindings (E15): the trtcpp._core extension. Built two ways:
+# Python bindings: the trtcpp._core extension. Built two ways:
 #   * in-tree, with -DTRT_CPP_API_BUILD_PYTHON=ON (added by the root CMakeLists), for dev/test;
 #   * standalone, by scikit-build-core from the top-level pyproject.toml (the wheel path), which
 #     configures the whole project with BUILD_PYTHON=ON.
 # Either way the core library targets (tensorrt_cpp_api[, ::preproc]) already exist in this
-# build tree, so the extension just links them. The static core must be PIC (the root sets
-# CMAKE_POSITION_INDEPENDENT_CODE when BUILD_PYTHON is on) to link into the module .so.
+# build tree, so the extension just links them. The static core is built position-independent
+# (set on its target) so it links cleanly into this module .so.
 
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 CONFIG REQUIRED)

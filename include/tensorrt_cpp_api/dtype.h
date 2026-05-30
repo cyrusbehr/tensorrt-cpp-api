@@ -50,7 +50,7 @@ constexpr std::size_t byteSize(DType t) noexcept { return static_cast<std::size_
 
 /// Total bytes to store `count` elements, honoring sub-byte packing. Assumes the result
 /// is representable in std::size_t; callers that allocate from untrusted counts must
-/// bounds-check first (the engine's buffer allocation in E5 does so before cudaMalloc).
+/// bounds-check first (the engine's buffer allocation does so before cudaMalloc).
 constexpr std::size_t byteSizeOf(DType t, std::size_t count) noexcept {
     return (static_cast<std::size_t>(bitsPerElement(t)) * count + 7) / 8;
 }
@@ -59,8 +59,8 @@ std::string_view toString(DType t) noexcept;
 
 /// Maps a C++ scalar type to its DType so typed accessors can dtype-check. Left
 /// undefined for unsupported T (using as<T>() with an unsupported T is a compile error).
-/// fp16/bf16/fp8 have no portable dep-free C++ scalar; their specializations arrive with
-/// the buffer/interop layer that needs them (E5+), in a CUDA-including header.
+/// fp16/bf16/fp8 have no portable dep-free C++ scalar; their specializations are defined by
+/// the buffer/interop layer that needs them, in a CUDA-including header.
 template <class T> struct DTypeOf;
 template <> struct DTypeOf<float> {
     static constexpr DType value = DType::kFloat32;

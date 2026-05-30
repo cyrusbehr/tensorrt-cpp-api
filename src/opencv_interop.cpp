@@ -34,7 +34,10 @@ Result<TensorView> viewOf(const cv::cuda::GpuMat &mat, Layout layout) {
     }
     const std::size_t rowBytes = static_cast<std::size_t>(mat.cols) * mat.elemSize();
     if (mat.step != rowBytes) {
-        return Status{StatusCode::kUnsupported, "non-continuous GpuMat (padded rows); clone() to a continuous buffer first"};
+        // GpuMat rows are usually pitched (padded for alignment); a TensorView has no row stride.
+        // Note clone() does NOT help (it is also pitched) -- copy into a cv::cuda::createContinuous
+        // buffer first.
+        return Status{StatusCode::kUnsupported, "non-continuous GpuMat (padded rows); copy into a cv::cuda::createContinuous buffer first"};
     }
     Shape shape{mat.rows, mat.cols, mat.channels()};
     // The GpuMat lives on the current CUDA device (OpenCV allocates on it); record that rather

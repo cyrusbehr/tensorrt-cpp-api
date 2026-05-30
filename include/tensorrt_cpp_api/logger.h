@@ -8,7 +8,7 @@ namespace trtcpp {
 
 /// Log severity, ordered ascending by importance (kVerbose=0 .. kInternalError=4). Each
 /// value corresponds to an nvinfer1::ILogger::Severity BY NAME, not by integer: nvinfer1's
-/// integer order is the reverse (kINTERNAL_ERROR=0 .. kVERBOSE=4), so the E4 TensorRT
+/// integer order is the reverse (kINTERNAL_ERROR=0 .. kVERBOSE=4), so the TensorRT
 /// bridge must translate per enumerator and never via a plain static_cast (that would
 /// invert every level).
 enum class Severity : std::uint8_t {

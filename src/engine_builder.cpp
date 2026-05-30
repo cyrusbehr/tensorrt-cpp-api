@@ -379,7 +379,7 @@ Result<std::vector<std::byte>> EngineBuilder::buildFromOnnxBytes(std::span<const
         config->addOptimizationProfile(trtProfile);
     }
 
-    // Timing cache: reuse tactic timings across cold builds (the audit flagged its absence).
+    // Timing cache: reuse tactic timings across cold builds.
     const std::string timingPath = options.timingCachePath.empty() ? (options.engineCacheDir + "/timing.cache") : options.timingCachePath;
     Status timingStatus;
     std::vector<std::byte> timingSeed = readFileBytes(timingPath, timingStatus); // missing is fine

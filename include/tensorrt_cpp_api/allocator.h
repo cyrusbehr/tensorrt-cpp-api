@@ -9,7 +9,7 @@ namespace trtcpp {
 
 /// Device-memory allocator abstraction so a host application can hand TensorRT its own
 /// arena. The default (defaultDeviceAllocator) is stream-ordered (cudaMallocAsync) from a
-/// private pool. Used by the engine's buffer management (E5); the standalone owning Tensor
+/// private pool. Used by the engine's buffer management; the standalone owning Tensor
 /// uses synchronous cudaMalloc since it has no stream at construction.
 class IDeviceAllocator {
 public:

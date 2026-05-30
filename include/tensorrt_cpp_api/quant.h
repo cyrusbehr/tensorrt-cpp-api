@@ -5,8 +5,8 @@
 
 namespace trtcpp {
 
-/// Precision / quantization mode for engine building. Version-aware and never a silent
-/// no-op (see docs/design/PHASE_D_DESIGN.md "Quantization story"):
+/// Precision / quantization mode for engine building. Version-aware and never a silent no-op
+/// (an unachievable mode fails the build with a clear error rather than downgrading):
 ///   kFp32           - full precision.
 ///   kFp16           - half precision. On TRT < 11 via the weak-typed kFP16 flag; on
 ///                     TRT >= 11 requires an FP16/QDQ ONNX (else kUnsupported).

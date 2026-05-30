@@ -20,8 +20,9 @@ namespace trtcpp::opencv {
 Result<DType> dtypeOfCvDepth(int cvDepth);
 
 /// Zero-copy device view over a CONTINUOUS GpuMat as an HWC tensor [rows, cols, channels].
-/// Errors (kUnsupported) on a padded (non-continuous) GpuMat -- clone() it first, since
-/// TensorView has no row stride. Device is assumed to be the current CUDA device.
+/// Errors (kUnsupported) on a padded (non-continuous) GpuMat -- GpuMat rows are usually pitched,
+/// and a TensorView has no row stride, so copy into a cv::cuda::createContinuous() buffer first
+/// (clone() does not help; it is pitched too). Device is the current CUDA device.
 Result<TensorView> viewOf(const cv::cuda::GpuMat &mat, Layout layout = Layout::kNHWC);
 
 /// Host view over a continuous cv::Mat as an HWC tensor [rows, cols, channels].

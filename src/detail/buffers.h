@@ -13,13 +13,13 @@ namespace trtcpp::detail {
 // Name-keyed reusable device buffers for an engine's IO tensors. Each slot owns a byte
 // buffer that is reallocated only when a tensor's required size grows (or its device
 // changes), so a fixed-shape inference loop allocates once and reuses thereafter --
-// addressing the dynamic-output-size and per-call-allocation issues from the audit.
+// addressing the dynamic-output-size and per-call-allocation issues.
 //
 // Backed by owning Tensors (synchronous cudaMalloc/cudaFree), so a slot is destruction-safe
 // without a stream; reuse amortizes the synchronous allocation cost across inferences.
 //
 // Device buffers only -- host staging is not managed here; the readback path already pins
-// host memory via Tensor::toHost (E3), so a separate pinned-host pool is deferred.
+// host memory via Tensor::toHost, so a separate pinned-host pool is not provided.
 // has()/names() report that a slot exists, not that it holds a live (non-zero) allocation.
 class NamedBuffers {
 public:

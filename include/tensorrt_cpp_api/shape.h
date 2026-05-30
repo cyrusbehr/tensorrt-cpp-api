@@ -12,7 +12,7 @@ namespace trtcpp {
 /// "dynamic / unresolved" (TensorRT's convention). Rank 0 is a scalar (numel 1).
 class Shape {
 public:
-    /// Matches nvinfer1::Dims::MAX_DIMS; static_assert'd against it once TRT is linked (E4).
+    /// Matches nvinfer1::Dims::MAX_DIMS; static_assert'd against it once TRT is linked.
     static constexpr int kMaxRank = 8;
 
     Shape() = default;

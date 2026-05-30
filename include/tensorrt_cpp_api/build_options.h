@@ -11,10 +11,10 @@
 
 namespace trtcpp {
 
-class ICalibrator; // forward-declared (defined in the calibration module, E10, gated < TRT 11)
+class ICalibrator; // forward-declared (defined in the calibration module, gated < TRT 11)
 
 /// One input's min/opt/max extents for an optimization profile. Multi-input,
-/// multi-dimension, multi-profile -- the dynamic-shape fix (community #80/#86/#29/#20).
+/// multi-dimension, multi-profile -- supports dynamic shapes.
 struct ProfileShape {
     std::string inputName;
     Shape min;

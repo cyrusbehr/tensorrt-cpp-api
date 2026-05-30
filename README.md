@@ -123,7 +123,6 @@ fetches the models.
 - [Quickstart & core concepts](docs/quickstart.md)
 - [Installation](docs/install.md)
 - [Upgrading from v6](docs/upgrading_from_v6.md)
-- [Design rationale](docs/design/PHASE_D_DESIGN.md)
 - API reference: `doxygen Doxyfile` (HTML in `docs/api/`)
 
 ## Sister projects

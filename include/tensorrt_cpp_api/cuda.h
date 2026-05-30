@@ -20,7 +20,7 @@ namespace trtcpp {
 Status cudaToStatus(cudaError_t code, std::string_view context = {});
 
 /// RAII CUDA stream. Either OWNS a stream it created, or WRAPS a caller-provided one
-/// (non-owning) -- the model the community asked for (#28/#43) and the Python bindings
+/// (non-owning) -- the model that callers asked for and the Python bindings
 /// require (an integer handle from torch/cupy). Replaces v6's per-call create/destroy.
 ///
 /// A default-constructed Stream owns a new non-blocking stream; if creation fails (only

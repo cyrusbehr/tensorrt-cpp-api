@@ -16,7 +16,7 @@ namespace trtcpp {
 /// enqueue boundary -- zero-copy by construction. Carries enough to drive
 /// setTensorAddress + setInputShape and to build DLPack / __cuda_array_interface__.
 ///
-/// The owning Tensor (allocate/toHost/copyFrom) is CUDA-backed and arrives in E3.
+/// The owning Tensor (allocate/toHost/copyFrom) is CUDA-backed.
 class TensorView {
 public:
     struct Desc {
