@@ -1,0 +1,21 @@
+name: Setup CUDA + TensorRT
+description: >
+  Install a consistent CUDA 12.6 + TensorRT 10.7 (cuda12.6) toolchain from NVIDIA's apt repo.
+  The TensorRT version is PINNED: the unversioned libnvinfer-dev now resolves to TensorRT 11 built
+  for CUDA 13, which is incompatible with the CUDA 12.6 toolkit. No GPU is needed to compile.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -eux
+        wget -qO cuda-keyring.deb \
+          "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb"
+        sudo dpkg -i cuda-keyring.deb
+        sudo apt-get update
+        TRT=10.7.0.23-1+cuda12.6
+        sudo apt-get install -y --no-install-recommends \
+          cuda-cudart-dev-12-6 cuda-nvcc-12-6 \
+          libnvinfer-dev="$TRT" libnvinfer-headers-dev="$TRT" libnvinfer10="$TRT" \
+          libnvonnxparsers-dev="$TRT" libnvonnxparsers10="$TRT"
+        echo "/usr/local/cuda-12.6/bin" >> "$GITHUB_PATH"

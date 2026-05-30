@@ -4,7 +4,7 @@ exclude: '(^|/)stb_image(_write)?\.h$'
 
 repos:
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: 'v18.1.3'  # match ubuntu-24.04's apt clang-format-18 (used by .github/workflows/format.yml)
+    rev: 'v18.1.8'  # must match the pip clang-format pinned in .github/workflows/format.yml
     hooks:
       - id: clang-format
         types_or: [c++, c, cuda]

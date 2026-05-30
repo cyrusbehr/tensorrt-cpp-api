@@ -466,8 +466,7 @@ PYBIND11_MODULE(_core, m) {
                    std::to_string(d.computeMinor) + ")";
         });
     m.def("device_count", []() { return unwrap(deviceCount()); });
-    m.def(
-        "query_device", [](int index) { return unwrap(queryDevice(index)); }, py::arg("index"));
+    m.def("query_device", [](int index) { return unwrap(queryDevice(index)); }, py::arg("index"));
 
     // ---- Tensor (owning) ----
     py::class_<Tensor>(m, "Tensor")

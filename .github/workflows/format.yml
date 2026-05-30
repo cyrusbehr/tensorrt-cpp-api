@@ -10,14 +10,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install -y clang-format-18
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install clang-format (pinned to match .pre-commit-config.yaml)
+        run: pip install "clang-format==18.1.8"
       - name: Check formatting (library + examples; excludes vendored stb)
         run: |
           files=$(git ls-files '*.h' '*.hpp' '*.cpp' '*.cu' \
             | grep -vE '(^|/)stb_image(_write)?\.h$')
           echo "$files"
-          clang-format-18 --dry-run --Werror $files
+          clang-format --dry-run --Werror $files
 
   clang-tidy:
     name: clang-tidy (changed files)
@@ -27,16 +30,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install toolchain
-        run: |
-          set -eux
-          sudo apt-get update && sudo apt-get install -y clang-tidy-18
-          wget -qO cuda-keyring.deb \
-            "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb"
-          sudo dpkg -i cuda-keyring.deb
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cuda-cudart-dev-12-6 cuda-nvcc-12-6 libnvinfer-dev libnvonnxparsers-dev
+      - uses: ./.github/actions/setup-trt
+      - name: Install clang-tidy
+        run: sudo apt-get install -y clang-tidy-18
       - name: Configure (export compile_commands.json)
         run: |
           cmake -S . -B build \
