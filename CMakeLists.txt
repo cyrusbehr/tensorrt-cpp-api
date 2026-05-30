@@ -15,12 +15,6 @@ option(TRT_CPP_API_WITH_SPDLOG "Build the optional spdlog logger adapter" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-# The Python extension is a shared module that links the (static) core library, so the core
-# must be position-independent. Set it globally when building the bindings.
-if(TRT_CPP_API_BUILD_PYTHON)
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-endif()
-
 # Enable CTest at the top level so tests registered in subdirectories (tests/, python/) are
 # discoverable. Called early -- before add_subdirectory(python) registers the binding test.
 if(TRT_CPP_API_BUILD_TESTS)
@@ -88,8 +82,12 @@ target_include_directories(
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
 )
 target_compile_features(tensorrt_cpp_api PUBLIC cxx_std_20)
+# POSITION_INDEPENDENT_CODE: the static core is routinely linked into shared objects -- the Python
+# extension and downstream shared libraries such as the YOLO sibling repos' libYoloV8_TRT.so -- so
+# it must be PIC. (Negligible cost; standard for an embeddable static library.)
 set_target_properties(
-    tensorrt_cpp_api PROPERTIES CXX_EXTENSIONS OFF VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR}
+    tensorrt_cpp_api PROPERTIES CXX_EXTENSIONS OFF POSITION_INDEPENDENT_CODE ON VERSION ${PROJECT_VERSION}
+                                SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 if(NOT MSVC)
     target_compile_options(tensorrt_cpp_api PRIVATE -Wall -Wextra)
@@ -133,6 +131,7 @@ if(TRT_CPP_API_BUILD_PREPROC)
         PROPERTIES CUDA_STANDARD 20
                    CUDA_STANDARD_REQUIRED ON
                    CXX_EXTENSIONS OFF
+                   POSITION_INDEPENDENT_CODE ON # embeddable into shared libs (Python ext, sibling .so)
                    EXPORT_NAME preproc # consumers link tensorrt_cpp_api::preproc (matches the in-tree alias)
                    VERSION ${PROJECT_VERSION}
                    SOVERSION ${PROJECT_VERSION_MAJOR}
