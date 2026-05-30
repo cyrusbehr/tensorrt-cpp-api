@@ -1,0 +1,20 @@
+@PACKAGE_INIT@
+
+# Re-resolve transitive dependencies in the consumer's scope (the exported targets reference
+# the imported CUDA/TensorRT/OpenCV/spdlog targets, which must exist downstream).
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}") # installed FindTensorRT.cmake
+include(CMakeFindDependencyMacro)
+
+find_dependency(CUDAToolkit)
+find_dependency(TensorRT) # pass -DTensorRT_DIR=<root> for a tarball install
+find_dependency(Threads)
+if(@TRT_CPP_API_WITH_OPENCV@)
+    find_dependency(OpenCV)
+endif()
+if(@TRT_CPP_API_WITH_SPDLOG@)
+    find_dependency(spdlog)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/tensorrt_cpp_apiTargets.cmake")
+
+check_required_components(tensorrt_cpp_api)

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "tensorrt-cpp-api"
+version = "7.0.0"
+description = "A no-throw C++ TensorRT inference library for CNN models, with zero-copy Python bindings."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Cyrus Behroozi" }]
+keywords = ["tensorrt", "inference", "cuda", "gpu", "deep-learning", "cnn"]
+classifiers = [
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.urls]
+Homepage = "https://github.com/cyrusbehr/tensorrt-cpp-api"
+Repository = "https://github.com/cyrusbehr/tensorrt-cpp-api"
+
+# scikit-build-core drives the project's own CMakeLists with the bindings turned on. TensorRT
+# and CUDA are system/externally provided; point the build at a tarball install with, e.g.:
+#   pip install . --config-settings=cmake.define.TensorRT_DIR=/opt/TensorRT-10.x
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.22"
+cmake.source-dir = "."
+wheel.packages = ["python/trtcpp"]
+build-dir = "build/skbuild/{wheel_tag}"
+
+[tool.scikit-build.cmake.define]
+TRT_CPP_API_BUILD_PYTHON = "ON"
+TRT_CPP_API_BUILD_PREPROC = "ON"
+TRT_CPP_API_BUILD_TESTS = "OFF"
+TRT_CPP_API_BUILD_EXAMPLES = "OFF"
+
+[tool.scikit-build.sdist]
+exclude = [".github", "build", "engines", "models", "inputs", "images"]

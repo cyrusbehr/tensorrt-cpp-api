@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Build + the non-GPU test suite. GitHub-hosted runners have no NVIDIA GPU, so we compile against
+  # the CUDA/TensorRT headers and run only `ctest -LE gpu`. The CUDA + TensorRT toolchain comes from
+  # the pinned composite action (.github/actions/setup-trt). The excluded GPU-labeled integration
+  # tests run via the manual-dispatch `gpu tests` workflow (.github/workflows/gpu-tests.yml).
+  build-cpu:
+    name: build + cpu tests (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-trt
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTRT_CPP_API_BUILD_TESTS=ON \
+            -DTRT_CPP_API_BUILD_PREPROC=ON \
+            -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc
+      - name: Build
+        run: cmake --build build -j2
+      - name: CPU tests (exclude gpu-labeled)
+        run: ctest --test-dir build -LE gpu --output-on-failure
+      - name: Install smoke (find_package consumer)
+        run: |
+          cmake --install build --prefix "$PWD/_install"
+          cmake -S .github/consumer -B build/consumer -DCMAKE_PREFIX_PATH="$PWD/_install"
+          cmake --build build/consumer
+          ./build/consumer/consumer
+
+  # AddressSanitizer + UBSan on the CPU test suite (preproc/CUDA off; the CPU tests don't need it).
+  sanitizers:
+    name: asan + ubsan (cpu tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-trt
+      - name: Configure (sanitized)
+        run: |
+          cmake -S . -B build-san \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DTRT_CPP_API_BUILD_TESTS=ON \
+            -DTRT_CPP_API_BUILD_PREPROC=OFF \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+      - name: Build CPU tests
+        run: cmake --build build-san -j2 --target trtcpp_core_tests
+      - name: Run CPU tests under sanitizers
+        run: ./build-san/tests/trtcpp_core_tests
+
+  # Python wheel build + import sanity (no GPU needed to import).
+  python-wheel:
+    name: python wheel + import
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: ./.github/actions/setup-trt
+      - name: Build + install the wheel
+        run: |
+          python -m pip install --upgrade pip
+          pip install . -v --config-settings=cmake.define.CMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc
+      - name: Import sanity
+        run: python -c "import trtcpp; print(trtcpp.version_string()); assert trtcpp.library_version()[0] == 7"

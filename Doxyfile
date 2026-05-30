@@ -1,0 +1,36 @@
+# Doxygen config for the tensorrt_cpp_api public API reference.
+#   doxygen Doxyfile        # -> HTML in docs/api/html/index.html
+# Only the public headers are documented; src/ (impl + detail) and third-party are excluded.
+
+PROJECT_NAME           = "tensorrt_cpp_api"
+PROJECT_NUMBER         = 7.0.0
+PROJECT_BRIEF          = "A no-throw C++ TensorRT inference library for CNN models"
+OUTPUT_DIRECTORY       = docs/api
+
+INPUT                  = include README.md docs/quickstart.md
+USE_MDFILE_AS_MAINPAGE = README.md
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hpp
+EXCLUDE_PATTERNS       = */build_config.h    # generated at build time
+
+# The headers use /// and /** */ comments; treat the first sentence as the brief.
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+HIDE_UNDOC_MEMBERS     = NO
+SHOW_NAMESPACES        = YES
+
+# C++20; let Doxygen see the project's own macros without a full build.
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+PREDEFINED             = TRT_CPP_API_WITH_OPENCV=1 \
+                         TRT_CPP_API_WITH_SPDLOG=1
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_TREEVIEW      = YES
+SORT_MEMBER_DOCS       = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO

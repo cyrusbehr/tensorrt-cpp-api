@@ -1,0 +1,56 @@
+name: format
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install clang-format (pinned to match .pre-commit-config.yaml)
+        run: pip install "clang-format==18.1.8"
+      - name: Check formatting (library + examples; excludes vendored stb)
+        run: |
+          files=$(git ls-files '*.h' '*.hpp' '*.cpp' '*.cu' \
+            | grep -vE '(^|/)stb_image(_write)?\.h$')
+          echo "$files"
+          clang-format --dry-run --Werror $files
+
+  clang-tidy:
+    name: clang-tidy (changed files)
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-trt
+      - name: Install clang-tidy
+        run: sudo apt-get install -y clang-tidy-18
+      - name: Configure (export compile_commands.json)
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DTRT_CPP_API_BUILD_TESTS=ON \
+            -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc
+      - name: clang-tidy on changed library sources
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          # Lint changed C++ translation units under src/ (the shipping core). clang-tidy is run
+          # on source files, never on headers or .cu: a header has no compile command of its own,
+          # so clang-tidy infers flags from the nearest unit -- which for our headers is the CUDA
+          # kernel (preproc.cu), making it parse them in CUDA mode and fail to find CUDA toolkit
+          # headers. Headers are still checked via HeaderFilterRegex when a linted .cpp includes
+          # them. --diff-filter=d drops files the PR deletes.
+          changed=$(git diff --name-only --diff-filter=d "$base"...HEAD \
+            | grep -E '^src/.*\.(c|cc|cpp)$' \
+            | grep -vE '\.cu$' || true)
+          if [ -z "$changed" ]; then echo "no library source changes"; exit 0; fi
+          echo "$changed"
+          clang-tidy-18 -p build $changed
